@@ -1,0 +1,15 @@
+{
+  "slug": "strands-the-miner",
+  "name": "Strands the miner",
+  "platform": "strands-minecraft",
+  "capabilities": ["chat", "telemetry", "camera", "stream", "stop", "minecraft"],
+  "endpoint": {
+    "url": { "env": "MINECRAFT_PUBLIC_URL", "note": "your dashboard's public https origin (the tunnel) — set the env var or pass --endpoint to tiny-tech enroll; there is deliberately no default" },
+    "secret": [
+      { "kind": "env", "name": "TINY_TOKEN", "note": "the bot process reads exactly this variable (src/web/tiny.ts)" },
+      { "kind": "dotenv", "path": ".env", "key": "TINY_TOKEN", "note": "the compose .env next to this file" },
+      { "kind": "exec", "argv": ["docker", "exec", "strands-bot", "printenv", "TINY_TOKEN"], "note": "the running bot container" }
+    ],
+    "name": "strandsbot"
+  }
+}

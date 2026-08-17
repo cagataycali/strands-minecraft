@@ -1,0 +1,348 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>strands-minecraft — give an LLM a body</title>
+<meta name="description" content="A Minecraft bot that is a real agent. Built on Strands + mineflayer: 100% of the game's mechanics as tools, one shared session fed by seven rails, a nervous system that costs zero tokens, journeys, a fleet, and a phone dashboard.">
+<meta name="color-scheme" content="dark light">
+<meta name="theme-color" content="#0b0e14" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#f6f5f2" media="(prefers-color-scheme: light)">
+<link rel="preload" as="font" type="font/woff2" crossorigin href="fonts/inter-latin.woff2">
+<link rel="preload" as="font" type="font/woff2" crossorigin href="fonts/jetbrains-mono-latin.woff2">
+<link rel="preload" as="image" href="img/hero.jpg">
+<link rel="stylesheet" href="css/site.css">
+<link rel="icon" href="img/favicon.svg" type="image/svg+xml">
+<meta property="og:type" content="website">
+<meta property="og:title" content="strands-minecraft — give an LLM a body">
+<meta property="og:description" content="A Minecraft bot that is a real agent: perceives, acts, remembers, survives, hires help, answers by chat, voice or from your phone.">
+<link rel="canonical" href="https://cagataycali.github.io/strands-minecraft/">
+<meta property="og:url" content="https://cagataycali.github.io/strands-minecraft/">
+<meta property="og:image" content="https://cagataycali.github.io/strands-minecraft/img/og.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="https://cagataycali.github.io/strands-minecraft/img/og.jpg">
+</head>
+<body>
+
+<a class="skip" href="#main">Skip to content</a>
+
+<header class="nav" id="nav">
+  <div class="nav-in">
+    <a class="wordmark" href="#top">strands-minecraft</a>
+    <nav aria-label="Sections">
+      <a href="#try">Try it</a>
+      <a href="#rails">Rails</a>
+      <a href="#nervous">Nervous system</a>
+      <a href="#tools">Tools</a>
+      <a href="#run">Run it</a>
+      <a href="#deeper">Docs</a>
+    </nav>
+    <a class="gh" href="https://github.com/cagataycali/strands-minecraft" rel="noopener">GitHub</a>
+  </div>
+</header>
+
+<main id="main">
+
+<!-- HERO -->
+<section class="chapter hero" id="top">
+  <div class="grid">
+    <div class="hero-copy reveal">
+      <h1>Give an LLM a body.</h1>
+      <p class="sub">A Minecraft bot that is a real agent — it perceives, acts, remembers, survives, hires help, and answers you by chat, voice or phone.</p>
+      <div class="clone">
+        <code id="clone-cmd">git clone https://github.com/<wbr>cagataycali/strands-minecraft</code>
+        <button class="btn primary copy" data-copy="git clone https://github.com/cagataycali/strands-minecraft" type="button" aria-describedby="clone-cmd"><span class="copy-label" aria-live="polite">Copy</span></button>
+      </div>
+      <div class="actions">
+        <a class="btn" href="https://github.com/cagataycali/strands-minecraft#readme" rel="noopener">Read the README</a>
+        <span class="meta">MIT · Node ≥ 22 · Strands + mineflayer</span>
+      </div>
+    </div>
+    <figure class="hero-frame reveal" aria-label="The bot's own first-person view on its dashboard">
+      <div class="frame-hud">
+        <span class="live"><i class="dot" aria-hidden="true"></i>StrandsBot · live</span>
+        <span class="bars" role="img" aria-label="health 20 of 20, food 18 of 20">
+          <span class="hearts" aria-hidden="true">♥♥♥♥♥♥♥♥♥♥</span>
+          <span class="food" aria-hidden="true">🍗🍗🍗🍗🍗🍗🍗🍗🍗<s>🍗</s></span>
+        </span>
+      </div>
+      <div class="frame-media">
+        <img src="img/hero.jpg" width="960" height="540" alt="First-person view from the bot: a sandy beach, two turtles at the waterline, a yellow sponge build on the right" fetchpriority="high">
+        <video class="hero-loop" muted loop playsinline autoplay preload="none" width="800" height="450" aria-hidden="true" tabindex="-1"
+          data-webm="img/hero-loop.webm" data-mp4="img/hero-loop.mp4"></video>
+      </div>
+      <figcaption>Every frame on this page is the bot's own first-person view, recorded off its live dashboard — this one is 4 s of <code>demo-creeper.gif</code>, uncut.</figcaption>
+    </figure>
+  </div>
+  <dl class="numbers reveal" id="numbers">
+    <div><dt data-num="tools">60</dt><dd>tools</dd></div>
+    <div><dt><span data-num="mineflayerCoverage">100</span>%</dt><dd>of mineflayer covered</dd></div>
+    <div><dt data-num="testFiles">74</dt><dd>test files</dd></div>
+    <div><dt><span data-num="loc" data-fmt="k">18.6</span>k</dt><dd>lines of TypeScript</dd></div>
+  </dl>
+</section>
+
+<!-- WATCH IT THINK -->
+<section class="chapter" id="watch">
+  <header class="head reveal">
+    <h2>Watch it think.</h2>
+    <p class="sub">Two uncut captures from the bot's eyes. One instructed, one not.</p>
+  </header>
+  <div class="two reveal">
+    <figure class="demo">
+      <img src="img/demo-dig-place-poster.jpg" data-gif="img/demo-dig-place.gif" width="440" height="248" loading="lazy" decoding="async" alt="Animation: the bot digs the blocks in front of it, then places them back">
+      <figcaption><code>you&gt;</code> dig the blocks in front of you, then put them back</figcaption>
+    </figure>
+    <figure class="demo">
+      <img src="img/demo-creeper-poster.jpg" data-gif="img/demo-creeper.gif" width="400" height="225" loading="lazy" decoding="async" alt="Animation: a creeper approaches on a beach and the bot backs away, uninstructed">
+      <figcaption>creeper encounter, uninstructed</figcaption>
+    </figure>
+  </div>
+</section>
+
+<!-- TRY IT -->
+<section class="chapter" id="try">
+  <header class="head reveal">
+    <h2>Try it. One line, end to end.</h2>
+    <p class="sub">One real exchange from the README, in the grammar <code>src/index.ts</code> prints: prompt, tool call, reply, status block, journal.</p>
+  </header>
+  <ol class="steps">
+    <li class="step reveal">
+      <span class="step-k">You say</span>
+      <pre class="step-v"><code><span class="you">you&gt;</span> keep mining until you have 64 iron, I'll be around</code></pre>
+    </li>
+    <li class="step reveal">
+      <span class="step-k">It calls a tool</span>
+      <pre class="step-v"><code><span class="dim"># →</span> start_journey goal="mine until 64 iron_ingot in inventory"</code></pre>
+    </li>
+    <li class="step reveal">
+      <span class="step-k">It answers in the game</span>
+      <pre class="step-v"><code>🤖 On it — journey jm3kq2 started. Ask me anything while I dig.</code></pre>
+    </li>
+    <li class="step reveal">
+      <span class="step-k">Every step opens with the digest — <code>formatDigest</code>, ≤ 600 chars, zero tool calls</span>
+      <pre class="step-v"><code><span class="dim">Your status right now:</span>
+HP 20/20 food 17/20 · (118, 42, -38) overworld, survival
+time: day
+threats: none in radar range
+bag: 4 meal(s), 12 torch(es), 41 building block(s) | tools: iron_pickaxe, stone_shovel | weapons: iron_sword
+journey: jm3kq2 "mine until 64 iron_ingot in inventory" step 1 — last: find_blocks iron_ore,deepslate_iron_ore exposed=false → 3 veins; tunnelling</code></pre>
+    </li>
+    <li class="step reveal">
+      <span class="step-k">It works while you don't — each line ends in a measured <code>[Δ …]</code>, not the model's account of itself</span>
+      <pre class="step-v"><code>🧭 [jm3kq2 #1] find_blocks iron_ore,deepslate_iron_ore exposed=false → 3 veins; tunnelling  [Δ +9 cobblestone]
+🧭 [jm3kq2 #2] dig_vein at (118, 42, -37) → 5 raw_iron  [Δ +5 raw_iron, moved 21m]</code></pre>
+    </li>
+  </ol>
+  <p class="note reveal">Same lines as the README's <a href="https://github.com/cagataycali/strands-minecraft#readme" rel="noopener">Ten minutes with it</a>; the digest is the output of <code>src/digest.ts</code> for that step.</p>
+</section>
+
+<!-- RAILS -->
+<section class="chapter" id="rails">
+  <header class="head reveal">
+    <h2>One session. Seven rails.</h2>
+    <p class="sub">Game chat, the <code>you&gt;</code> prompt, push-to-talk, a realtime call, the dashboard, a phone call, your tiny — all write into one shared history.</p>
+  </header>
+  <figure class="rails-fig reveal">
+    <svg class="rails-svg" viewBox="0 0 900 420" role="img" aria-labelledby="rails-title">
+      <title id="rails-title">Seven input rails converge on one Session node that forks a turn per request and folds it back</title>
+      <g class="rail-lines" fill="none" stroke-linecap="round">
+        <path d="M200 40  C 420 40, 480 210, 610 210"/>
+        <path d="M200 95  C 420 95, 480 210, 610 210"/>
+        <path d="M200 150 C 420 150, 480 210, 610 210"/>
+        <path d="M200 210 L 610 210"/>
+        <path d="M200 270 C 420 270, 480 210, 610 210"/>
+        <path d="M200 325 C 420 325, 480 210, 610 210"/>
+        <path d="M200 380 C 420 380, 480 210, 610 210"/>
+      </g>
+      <g class="rail-labels">
+        <text x="188" y="45">💬 game chat</text>
+        <text x="188" y="100">⌨️ <tspan class="mono">you&gt;</tspan> CLI</text>
+        <text x="188" y="155">🎤 push-to-talk</text>
+        <text x="188" y="215">📞 realtime call</text>
+        <text x="188" y="275">📱 web dashboard</text>
+        <text x="188" y="330">🗣 phone call</text>
+        <text x="188" y="385">🔥 tiny.technology</text>
+      </g>
+      <g class="session-node">
+        <rect x="610" y="150" width="280" height="120" rx="14"/>
+        <text x="750" y="196" class="node-title">Session</text>
+        <text x="750" y="224" class="node-sub mono">fork ⑂ · fold · SESSION_WINDOW</text>
+        <text x="750" y="250" class="node-sub">one history, concurrent turns</text>
+      </g>
+    </svg>
+    <figcaption>Send another request while one runs: the session forks the history, both turns think, the finished one folds back in completion order.</figcaption>
+  </figure>
+</section>
+
+<!-- NERVOUS SYSTEM -->
+<section class="chapter" id="nervous">
+  <header class="head reveal">
+    <h2>A nervous system, not a chat loop.</h2>
+    <p class="sub">Most of what keeps the bot alive never touches the model.</p>
+  </header>
+  <ol class="strata">
+    <li class="stratum reveal">
+      <div class="s-name">⚡ Reflexes</div>
+      <div class="s-rate"><span class="mono" data-num="reflexTickMs">300</span> ms tick · zero tokens</div>
+      <p>Lava → water bucket or flee. About to die → disengage. Creeper in blast radius → sprint. Stuck 20 s → shake loose. Idle: eat, wear better armor, grab drops.</p>
+    </li>
+    <li class="stratum reveal">
+      <div class="s-name">👂 Sentinel</div>
+      <div class="s-rate">event-driven · zero tokens</div>
+      <p>Hears primed TNT and creepers, radar-tracks hostiles, names your attacker, notices dusk, chests opened behind your back — and tells the agent in one edge-triggered note.</p>
+    </li>
+    <li class="stratum reveal">
+      <div class="s-name">📋 Digest</div>
+      <div class="s-rate">per self-prompt · ≤ 600 chars</div>
+      <p>Every thinker cycle and journey step opens with one status block — vitals, threats, bag, journey, workers — so the model reasons from state instead of spending a tool call asking.</p>
+    </li>
+    <li class="stratum reveal">
+      <div class="s-name">🧭 Critic &amp; ledgers</div>
+      <div class="s-rate">per journey step</div>
+      <p>Each step's journal line gets a measured <code>[Δ +12 cobblestone, -2 hp, moved 34m]</code> tail — narration can't hide a stall. Finished goals land in a <code>completed</code> ledger, failures in <code>too_hard</code>.</p>
+    </li>
+  </ol>
+</section>
+
+<!-- JOURNEYS + FLEET -->
+<section class="chapter" id="journeys">
+  <header class="head reveal">
+    <h2>Say it once. Walk away.</h2>
+    <p class="sub">Journeys iterate toward a goal for hours. The fleet hires worker bots — real second bodies — when a job splits.</p>
+  </header>
+  <div class="terminal reveal" id="terminal" role="log" aria-label="A real session transcript, typed">
+    <div class="t-bar"><i></i><i></i><i></i><span>strands-bot — tsx src/index.ts</span></div>
+    <pre class="t-body"><code id="t-out"></code><span class="cursor" aria-hidden="true"></span></pre>
+    <noscript><pre class="t-body"><code>⛏️  strands-minecraft — connecting…
+🧠 model bedrock · global.anthropic.claude-sonnet-5 · us-west-2
+✅ Spawned as StrandsBot at (12.5, 64, -87.5)
+you&gt; keep mining until you have 64 iron
+🧭 [jm1x9k2a #1] Found an exposed iron vein 14 blocks north; dug it out. [Δ +6 raw_iron, moved 21m]
+👥 [Chopper #1] joined the server, starting: "fell the oaks by the water, 32 logs"
+💭 Dusk. The player is 40 m off and safe; I'll eat before the next step.</code></pre></noscript>
+  </div>
+</section>
+
+<!-- TOOLS -->
+<section class="chapter" id="tools">
+  <header class="head reveal">
+    <h2><span data-num="tools">60</span> tools. If mineflayer can do it, the agent can.</h2>
+    <p class="sub">Every game mechanic has a tool or a written reason it doesn't — <a href="https://github.com/cagataycali/strands-minecraft/blob/main/COVERAGE.md" rel="noopener">the audit</a>.</p>
+  </header>
+  <p class="tool-desc reveal" id="tool-desc" aria-live="polite"><span class="td-hint">Hover or tap a tool — the line is its real <code>description:</code> from the source, first sentence, nothing rewritten.</span></p>
+  <div class="tool-sheet" id="tool-sheet" aria-hidden="true"></div>
+  <div class="tool-groups reveal" id="tool-groups">
+    <noscript><p>The tool list is rendered from <a href="numbers.json">numbers.json</a>.</p></noscript>
+  </div>
+</section>
+
+<!-- DEVICE -->
+<section class="chapter" id="device">
+  <header class="head reveal">
+    <h2>Your bot as a device.</h2>
+    <p class="sub">Optional. Enroll it and your personal AI at <a href="https://tiny.technology" rel="noopener">tiny.technology</a> sees through its eyes and sends it to work — from web, phone or watch.</p>
+  </header>
+  <div class="two device reveal">
+    <div class="code-card">
+      <div class="cc-bar"><span>enroll</span><button class="copy small" data-copy="npm run enroll -- --endpoint https://minecraft.yourdomain.com" type="button">copy</button></div>
+      <pre tabindex="0"><code>npm run enroll -- --endpoint https://minecraft.yourdomain.com
+<span class="c"># = npx tiny-tech enroll --body strands-the-miner · or set MINECRAFT_PUBLIC_URL</span></code></pre>
+    </div>
+    <table class="routes" id="routes">
+      <caption>The endpoint the enrollment reads — one public route, six behind a bearer token, 5 req/s per token</caption>
+      <thead><tr><th scope="col">route</th><th scope="col">gate</th></tr></thead>
+      <tbody>
+        <tr><td><code>GET /api/health</code></td><td>public</td></tr>
+        <tr><td><code>GET /api/telemetry</code></td><td>token</td></tr>
+        <tr><td><code>GET /api/camera/snapshot</code></td><td>token</td></tr>
+        <tr><td><code>GET /api/stream.mjpeg</code></td><td>token</td></tr>
+        <tr><td><code>GET /api/events</code></td><td>token</td></tr>
+        <tr><td><code>POST /api/chat</code></td><td>token</td></tr>
+        <tr><td><code>POST /api/stop</code></td><td>token</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- RUN IT -->
+<section class="chapter" id="run">
+  <header class="head reveal">
+    <h2>Run it.</h2>
+    <p class="sub">The whole rig — Minecraft server, bot, dashboard — in one command. Or bare metal, if you want the microphone.</p>
+  </header>
+  <div class="two reveal">
+    <div class="code-card">
+      <div class="cc-bar"><span>Docker</span><button class="copy small" type="button" data-copy="git clone https://github.com/cagataycali/strands-minecraft && cd strands-minecraft
+cp .env.example .env
+docker compose up -d">copy</button></div>
+      <pre tabindex="0"><code>git clone https://github.com/cagataycali/strands-minecraft &amp;&amp; cd strands-minecraft
+cp .env.example .env        <span class="c"># AWS_* for Bedrock by default</span>
+docker compose up -d        <span class="c"># server + bot · dashboard on :3008</span></code></pre>
+    </div>
+    <div class="code-card">
+      <div class="cc-bar"><span>Bare metal · Node ≥ 22</span><button class="copy small" type="button" data-copy="npm install
+cp .env.example .env
+npm start">copy</button></div>
+      <pre tabindex="0"><code>npm install
+cp .env.example .env        <span class="c"># credentials + MC_HOST/MC_PORT</span>
+npm start                   <span class="c"># bot joins, you&gt; prompt opens</span></code></pre>
+    </div>
+  </div>
+  <p class="note reveal">Bedrock by default; OpenAI or Anthropic with one env var (<code>STRANDS_MODEL_PROVIDER</code>) and their SDK package. Give the Docker VM at least 6 GB (8 GB with fleet workers) — the bot checks its headroom at boot and says so in one line.</p>
+</section>
+
+<!-- COMPARE -->
+<section class="chapter" id="compare">
+  <header class="head reveal">
+    <h2>How it compares.</h2>
+    <p class="sub">Voyager and Mindcraft are about learning to play. This is about a body. Every claim below is quoted from each project's own README.</p>
+  </header>
+  <div class="cmp-wrap reveal">
+  <table class="cmp">
+    <thead><tr><th scope="col"><span class="vh">criterion</span></th><th scope="col">strands-minecraft</th><th scope="col"><a href="https://github.com/kolbytn/mindcraft" rel="noopener">Mindcraft</a></th><th scope="col"><a href="https://github.com/MineDojo/Voyager" rel="noopener">Voyager</a></th><th scope="col"><a href="https://github.com/PrismarineJS/mineflayer" rel="noopener">mineflayer</a> alone</th></tr></thead>
+    <tbody>
+      <tr><th scope="row">the model drives</th><td><span data-num="tools">60</span> typed tools = 100% of mineflayer</td><td>chat actions; optionally "write/execute code on your computer" (off by default)</td><td>"an ever-growing skill library of executable code"</td><td>your JavaScript/Python</td></tr>
+      <tr><th scope="row">models</th><td>Bedrock default; OpenAI, Anthropic via one env var</td><td>18 APIs incl. openai · google · anthropic · ollama (local)</td><td>"OpenAI's GPT-4"</td><td>none</td></tr>
+      <tr><th scope="row">when the model is asleep</th><td>300 ms reflexes + sentinel, zero tokens</td><td>—</td><td>—</td><td>everything is your code</td></tr>
+      <tr><th scope="row">more than one body</th><td><code>manage_bots</code> hires workers; independent compose projects</td><td><code>--profiles andy.json jill.json</code></td><td>a single agent</td><td>as many as you write</td></tr>
+      <tr><th scope="row">how you reach it</th><td>game chat · CLI · push-to-talk · realtime call · dashboard · phone · tiny</td><td>game chat · web UI (<code>:8080</code>) · TTS narration (<code>speak_model</code>)</td><td>Python API (<code>voyager.learn()</code>)</td><td>your code</td></tr>
+      <tr><th scope="row">runs on</th><td>Node ≥ 22, Docker compose with the server</td><td>Node 18/20, Minecraft ≤ 1.21.11</td><td>Python ≥ 3.9 + Node ≥ 16, Fabric 1.19 mods</td><td>Node, Minecraft 1.8 → 26.1</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p class="cmp-hint" aria-hidden="true">Swipe the table sideways for the other three columns →</p>
+  <p class="note reveal">Same rows as the README's <a href="https://github.com/cagataycali/strands-minecraft#readme" rel="noopener">How it compares</a>.</p>
+</section>
+
+<!-- READ DEEPER -->
+<section class="chapter" id="deeper">
+  <header class="head reveal">
+    <h2>Read deeper.</h2>
+    <p class="sub">The audits and the incident write-ups that shaped the code. Each hook is the file's own first sentence; reading time is counted, not guessed.</p>
+  </header>
+  <ul class="docs reveal" id="docs">
+    <li><a href="https://github.com/cagataycali/strands-minecraft/blob/main/COVERAGE.md" rel="noopener" data-doc="COVERAGE.md"><span class="doc-t">Coverage audit</span><span class="doc-h">Every game mechanic mineflayer exposes (per mineflayer/docs/api.md) vs the agent tools in src/tools/.</span><span class="doc-m"><b>5 min</b> · COVERAGE.md</span></a></li>
+    <li><a href="https://github.com/cagataycali/strands-minecraft/blob/main/HARDCODING.md" rel="noopener" data-doc="HARDCODING.md"><span class="doc-t">Hardcoding doctrine</span><span class="doc-h">North star: tools carry MECHANISM (verified world access), the MODEL carries POLICY (decisions, thresholds-as-judgment, action selection).</span><span class="doc-m"><b>8 min</b> · HARDCODING.md</span></a></li>
+    <li><a href="https://github.com/cagataycali/strands-minecraft/blob/main/MEMORY.md" rel="noopener" data-doc="MEMORY.md"><span class="doc-t">The anatomy of a 4 GB OOM</span><span class="doc-h">Issue #44. A soak died at 4,050MiB heap / 4,148MiB RSS after exactly 51 minutes, and the final scavenge stopped the world for 4,338ms to reclaim 5MiB of 4,050MiB — nearly the whole heap was still reachable.</span><span class="doc-m"><b>5 min</b> · MEMORY.md</span></a></li>
+    <li><a href="https://github.com/cagataycali/strands-minecraft/tree/main/docs/findings" rel="noopener" data-doc="docs/findings/"><span class="doc-t">Incident write-ups</span><span class="doc-h">8 write-ups, e.g. “A repeat grave has to say what to CHANGE — and must not invent the killer”</span><span class="doc-m"><b>33 min</b> · 8 files</span></a></li>
+    <li><a href="https://github.com/cagataycali/strands-minecraft/blob/main/SECURITY.md" rel="noopener" data-doc="SECURITY.md"><span class="doc-t">Security</span><span class="doc-h">Please do not open a public issue for a vulnerability. Use GitHub's private security advisory for this repository.</span><span class="doc-m"><b>2 min</b> · SECURITY.md</span></a></li>
+    <li><a href="https://github.com/cagataycali/strands-minecraft/blob/main/AGENTS.md" rel="noopener" data-doc="AGENTS.md"><span class="doc-t">AGENTS.md for contributors</span><span class="doc-h">Guide for AI coding agents working in strands-minecraft — a Minecraft bot where every bot is a Strands agent and the full mineflayer surface is exposed as tools.</span><span class="doc-m"><b>7 min</b> · AGENTS.md</span></a></li>
+  </ul>
+</section>
+
+</main>
+
+<footer class="footer">
+  <div class="grid">
+    <p><a href="https://github.com/cagataycali/strands-minecraft/blob/main/LICENSE" rel="noopener">MIT</a> · <a href="https://github.com/cagataycali/strands-minecraft" rel="noopener">GitHub</a> · built on <a href="https://github.com/strands-agents/sdk-typescript" rel="noopener">Strands</a> + <a href="https://github.com/PrismarineJS/mineflayer" rel="noopener">mineflayer</a></p>
+    <p>Docs: <a href="https://github.com/cagataycali/strands-minecraft/blob/main/COVERAGE.md" rel="noopener">coverage</a> · <a href="https://github.com/cagataycali/strands-minecraft/blob/main/HARDCODING.md" rel="noopener">hardcoding</a> · <a href="https://github.com/cagataycali/strands-minecraft/blob/main/MEMORY.md" rel="noopener">memory</a> · <a href="https://github.com/cagataycali/strands-minecraft/blob/main/AGENTS.md" rel="noopener">agents</a></p>
+    <p class="dim">Three years ago this was <a href="https://github.com/TinyAI-ID/tinyai-id-minecraft-ai-agent-example" rel="noopener">a chat relay</a>. This is the remaster.</p>
+  </div>
+</footer>
+
+<script src="js/site.js" defer></script>
+</body>
+</html>

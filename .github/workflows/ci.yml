@@ -1,0 +1,32 @@
+# Every push and PR: the same two commands AGENTS.md asks a contributor to run
+# before proposing a change. Node 22 (package.json engines), ubuntu, npm cache.
+# canvas (prismarine-viewer) has a prebuilt binary for linux-x64 — no apt step
+# unless a run proves otherwise.
+name: ci
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - name: numbers.json is not stale
+        run: node scripts/site-numbers.mjs --check
+      - name: the package ships what it says
+        run: npm pack --dry-run 2>&1 | tail -12

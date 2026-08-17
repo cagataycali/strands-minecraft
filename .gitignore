@@ -1,0 +1,9 @@
+.env
+.env.*
+!.env.example
+.web_auth.json
+*.log
+bot.log
+dist/
+mc-data/
+node_modules/

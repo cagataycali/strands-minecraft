@@ -1,0 +1,20 @@
+name: Feature request
+description: A tool, rail, sense or reflex the bot should have.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: want
+    attributes:
+      label: What should the bot be able to do
+      description: Describe it as the sentence you'd type at `you>`.
+    validations: { required: true }
+  - type: textarea
+    id: why
+    attributes:
+      label: Why the current tools don't get there
+      description: Which tool you tried, what it did. COVERAGE.md maps mineflayer → tool; if mineflayer can't do it either, say so.
+  - type: dropdown
+    id: layer
+    attributes:
+      label: Which layer
+      options: [tool (model decides when), reflex (300 ms, no model), sentinel note (event → note), rail (a new way to reach the bot), dashboard, docs]

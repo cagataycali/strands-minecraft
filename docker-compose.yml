@@ -1,0 +1,93 @@
+# The whole rig: world + bot + tunnel. `docker compose up -d` and the bot is
+# in-game with the dashboard on :3008 — no Java client, no laptop-must-stay-
+# awake, and an OOM'd bot restarts itself instead of staying dead.
+#
+#   docker compose up -d              # server + bot
+#   docker compose --profile tunnel up -d   # + minecraft.yourdomain.com
+#   docker attach strands-bot         # the you> prompt (detach: ctrl-p ctrl-q)
+#
+# Bring your own world: stop the stack, copy your save into ./mc-data/world,
+# start again. Model credentials: .env (AWS_* / OPENAI_API_KEY / …).
+
+services:
+  minecraft:
+    image: itzg/minecraft-server:latest
+    container_name: strands-mc
+    environment:
+      EULA: "TRUE"
+      TYPE: VANILLA
+      # pinned, not latest: the bot speaks through minecraft-data, which
+      # always trails brand-new releases ("No data available for version X")
+      VERSION: "1.21.11"
+      # match the bot: offline auth — gate the HOST PORT with your firewall
+      ONLINE_MODE: "FALSE"
+      MEMORY: ${MC_MEMORY:-2G}   # server JVM heap — counts against the VM too
+      MOTD: "strands-minecraft — the bot lives here"
+    ports:
+      - "${MC_PUBLIC_PORT:-25565}:25565"
+    volumes:
+      - ./mc-data:/data
+    restart: unless-stopped
+
+  bot:
+    build: .
+    container_name: ${BOT_CONTAINER_NAME:-strands-bot}
+    depends_on:
+      minecraft:
+        condition: service_healthy   # itzg image ships mc-health
+    environment:
+      MC_HOST: ${MC_HOST:-minecraft}         # point at the sibling container;
+      MC_PORT: ${MC_PORT:-25565}             # override MC_HOST in .env to use an
+                                             # outside server (host.docker.internal
+                                             # reaches your Mac/PC)
+      MC_USERNAME: ${MC_USERNAME:-StrandsBot} # per-instance name — see README
+                                              # "Run a second bot"
+      # Crew bots sharing this server: their chat is logged but never buys a
+      # turn, so multiple agents don't trigger each other into a runaway loop.
+      PEER_BOTS: ${PEER_BOTS:-}
+      # token-burn knobs — per-instance, shell overrides win (multi-bot rigs
+      # share one Bedrock TPM quota; calm the idle thinkers before raising it)
+      THINKER_DISABLED: ${THINKER_DISABLED:-false}
+      THINKER_INTERVAL_MS: ${THINKER_INTERVAL_MS:-90000}
+      # the brain: bedrock (default, AWS_* creds) | openai | anthropic — the last
+      # two need their peer package in the image (`npm install openai` before
+      # `docker compose build`); empty MODEL_ID = the provider's default
+      STRANDS_MODEL_PROVIDER: ${STRANDS_MODEL_PROVIDER:-bedrock}
+      STRANDS_MODEL_ID: ${STRANDS_MODEL_ID:-}
+      # heap cap — must stay BELOW mem_limit below, which must stay below the
+      # memory your Docker VM really has (issue #13: a limit bigger than the VM
+      # means the OOM killer decides, not V8). The bot prints a 🚨 line at boot
+      # if these don't hold. Lower BOTH together on a small VM.
+      NODE_OPTIONS: --max-old-space-size=${BOT_HEAP_MB:-2048}
+    env_file:
+      - path: .env
+        required: false              # model creds, WEB_BOOTSTRAP_TOKEN, …
+    ports:
+      - "${WEB_PUBLIC_PORT:-3008}:3008"   # dashboard
+      - "${VIEWER_PUBLIC_PORT:-3007}:3007" # raw first-person viewer
+    volumes:
+      - bot-state:/data                    # passkeys — survive rebuilds
+      - bot-memory:/root/.strands-minecraft # waypoints — survive rebuilds
+    stdin_open: true                 # keep the you> prompt alive for attach
+    tty: true
+    # the heap cap above keeps V8 honest; this keeps the host safe. Sizing:
+    # server JVM (2G) + bot (3G) + overhead ⇒ the VM needs ≥6GB, ≥8GB if you
+    # hire fleet workers. Check with `docker info | grep -i memory`.
+    mem_limit: ${BOT_MEM_LIMIT:-3g}
+    restart: unless-stopped          # the OOM answer: crash → back in-game
+
+  # Face ID from anywhere. Needs a one-time `cloudflared tunnel create` on the
+  # host (see README) — then this container carries it.
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: strands-tunnel
+    profiles: [tunnel]
+    depends_on: [bot]
+    command: tunnel --no-autoupdate run --url http://bot:3008 ${TUNNEL_NAME:-minecraft}
+    volumes:
+      - ~/.cloudflared:/home/nonroot/.cloudflared:ro
+    restart: unless-stopped
+
+volumes:
+  bot-state:
+  bot-memory:

@@ -1,0 +1,73 @@
+{
+  "name": "strands-minecraft",
+  "version": "0.1.0",
+  "description": "Give an LLM a body \u2014 a Minecraft bot that is a real Strands agent: 100% of mineflayer as tools.",
+  "keywords": [
+    "minecraft",
+    "mineflayer",
+    "strands",
+    "strands-agents",
+    "agent",
+    "ai",
+    "llm",
+    "bot",
+    "tiny"
+  ],
+  "homepage": "https://cagataycali.github.io/strands-minecraft/",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/cagataycali/strands-minecraft.git"
+  },
+  "bugs": {
+    "url": "https://github.com/cagataycali/strands-minecraft/issues"
+  },
+  "author": "Cagatay Cali",
+  "license": "MIT",
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": {
+    "strands-minecraft": "bin/strands-minecraft.mjs"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "files": [
+    "bin",
+    "src",
+    "tsconfig.json",
+    "README.md",
+    "LICENSE",
+    "tiny.body.json",
+    "docker-compose.yml",
+    "Dockerfile",
+    ".env.example"
+  ],
+  "scripts": {
+    "start": "tsx src/index.ts",
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.test.json",
+    "test": "tsx --test test/*.test.ts",
+    "enroll": "npx -y tiny-tech@latest enroll --body strands-the-miner",
+    "probe:digprice": "node scripts/probes/probe-digprice.mjs"
+  },
+  "dependencies": {
+    "@simplewebauthn/server": "^13.3.2",
+    "@strands-agents/sdk": "^1.13.0",
+    "@types/ws": "^8.18.1",
+    "canvas": "^3.2.3",
+    "dotenv": "^17.4.2",
+    "mineflayer": "^4.37.1",
+    "mineflayer-pathfinder": "^2.4.5",
+    "prismarine-viewer": "^1.33.0",
+    "puppeteer-core": "^25.7.0",
+    "tsx": "^4.19.0",
+    "vec3": "^0.1.10",
+    "ws": "^8.21.3",
+    "zod": "^4.1.12"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.7.0"
+  }
+}

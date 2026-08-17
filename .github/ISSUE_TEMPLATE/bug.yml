@@ -1,0 +1,45 @@
+name: Bug report
+description: The bot did something wrong, or didn't do something it should have.
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you asked (chat line, `you>` prompt, voice, dashboard) and what the bot did instead.
+    validations: { required: true }
+  - type: textarea
+    id: boot
+    attributes:
+      label: Boot lines
+      description: The first ~20 lines the bot prints — they carry the model line (`🧠 model …`), the memory audit and the version detection.
+      render: text
+    validations: { required: true }
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs around the moment
+      description: "`docker compose logs --since 10m bot` (Docker) or the terminal output (bare metal). Feed lines (`💭`, `⚡`, `👂`, `🧭`, `👥`) tell the story."
+      render: text
+  - type: input
+    id: mc
+    attributes:
+      label: Minecraft server version
+      placeholder: "1.21.11 (bundled compose) / paper 1.21.4 / …"
+    validations: { required: true }
+  - type: dropdown
+    id: how
+    attributes:
+      label: How you run it
+      options: [docker compose (bundled server), docker compose (own server), bare metal npm start, npx strands-minecraft]
+    validations: { required: true }
+  - type: input
+    id: provider
+    attributes:
+      label: Model provider and id
+      placeholder: "bedrock · global.anthropic.claude-sonnet-5"
+  - type: textarea
+    id: env
+    attributes:
+      label: Non-default .env (no secrets)
+      description: Which knobs you changed — REFLEX_*, SENTINEL_*, THINKER_*, TRUSTED_PLAYERS, memory sizes…

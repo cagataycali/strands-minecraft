@@ -1,0 +1,8 @@
+node_modules
+mc-data
+assets
+bot.log
+.web_auth.json
+.env
+.git
+*.md
