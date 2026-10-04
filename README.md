@@ -228,6 +228,25 @@ Live MJPEG of the bot's eyes, an SSE feed of everything it hears/thinks/does, an
 talks straight into the session — phone-first, installable (Add to Home Screen), locked behind
 **WebAuthn passkeys**: enroll once, Face ID forever. Reset = `rm .web_auth.json`.
 
+![the dashboard on a desktop: the world on the left, vitals + bag under it, the conversation on the right](assets/dashboard-desktop.png)
+
+- **Desktop ≥ 900 px** is two columns — the world letterboxed on the left, the conversation as a
+  phone-width column on the right. On a phone it is the original stacked page.
+- **STOP** on the stage is the reflex halt (`POST /api/stop`): pathfinder, controls, digging and the
+  journey stop in ~60 ms, no model turn. The toast tells you exactly what stopped.
+- **Vitals strip** under the video from `/api/telemetry`: what the body is doing, day + Minecraft
+  clock (dawn/day/dusk/night), weather, dimension · biome, xp, air (only underwater), held item,
+  nearest hostiles, players — dimmed and marked **stale** when the sample is older than 15 s.
+  The **🎒 bag** opens the inventory grid, held item first.
+- **Journey/worker cards** are titled by their *goal*, not their id.
+- **The veil over the video says what is wrong**: *connecting to the camera* → *warming up · 12s*
+  (the first frame takes ~30 s) → *stream stalled* → *camera broken: …* → *bot is not in the
+  world* → *dashboard unreachable*. The dot is green (live), amber (feed up, body out of the
+  world) or red (feed down).
+- **Second bot in the same world?** Put the other bots in `PEER_BOTS` on *both* sides — two bots
+  that read each other as humans chat forever and buy a model turn per line.
+- axe: 0 violations on phone and desktop (contrast AA, landmarks, keyboard-reachable scrollers).
+
 ```bash
 cloudflared tunnel login && cloudflared tunnel create minecraft
 cloudflared tunnel route dns minecraft minecraft.yourdomain.com
