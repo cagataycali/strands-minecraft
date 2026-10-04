@@ -10,7 +10,7 @@
  *    scrolls under it; the composer sticks to the bottom above the keyboard.
  */
 import { veilFor } from './veil.js';
-import { stopReceipt, mcClock, vitalsModel, systemTone, inventoryModel, crewTitle } from './hud.js';
+import { stopReceipt, mcClock, vitalsModel, systemTone, inventoryModel, crewTitle, displayText } from './hud.js';
 
 export const PAGE_HTML = /* html */ `<!doctype html>
 <html lang="en">
@@ -106,6 +106,7 @@ export const PAGE_HTML = /* html */ `<!doctype html>
   .ev .meta { font-size:11px; color:#8b98a5; margin:2px 6px 0; }
   .ev.in { align-items:flex-end; }
   .ev.in .bubble { background:#1f6feb; color:#fff; border-bottom-right-radius:4px; }
+  .ev.in.pending .bubble { opacity:.6; }
   .ev.out { align-items:flex-start; }
   .ev.out .bubble { background:#1c2230; border-bottom-left-radius:4px; }
   .ev.chat { align-items:flex-start; }
@@ -312,6 +313,7 @@ ${vitalsModel.toString()}
 ${systemTone.toString()}
 ${inventoryModel.toString()}
 ${crewTitle.toString()}
+${displayText.toString()}
 
 const feed = document.getElementById('feed');
 const jump = document.getElementById('jump');
@@ -363,14 +365,18 @@ function renderFilters() {
 const atBottom = () => feed.scrollHeight - feed.scrollTop - feed.clientHeight < 60;
 
 function evNode(ev) {
+  const shownText = displayText(ev, shown.has('chat'));
+  if (shownText === null) return null; // a duplicate of the chat row
   const div = document.createElement('div');
   div.className = 'ev ' + ev.kind + (ev.kind === 'system' ? ' ' + systemTone(ev.text) : '');
+  if (ev.pending) div.classList.add('pending');
+  if (ev.replyTo) div.dataset.replyTo = ev.replyTo;
   const bubble = document.createElement('div');
   bubble.className = 'bubble';
-  bubble.textContent = ev.text;
+  bubble.textContent = shownText;
   const meta = document.createElement('div');
   meta.className = 'meta';
-  meta.textContent = ev.who + ' · ' + rel(ev.ts);
+  meta.textContent = ev.pending ? 'sending\u2026' : ev.who + ' · ' + rel(ev.ts);
   meta.dataset.ts = ev.ts;
   div.appendChild(bubble);
   div.appendChild(meta);
@@ -378,6 +384,8 @@ function evNode(ev) {
 }
 
 function appendEv(ev) {
+  const node = evNode(ev);
+  if (!node) return;
   const day = new Date(ev.ts).toDateString();
   if (day !== lastDay) {
     lastDay = day;
@@ -387,7 +395,7 @@ function appendEv(ev) {
       : new Date(ev.ts).toLocaleDateString(undefined, { month:'short', day:'numeric' });
     feed.appendChild(d);
   }
-  feed.appendChild(evNode(ev));
+  feed.appendChild(node);
   while (feed.children.length > 400) feed.removeChild(feed.firstChild);
 }
 
@@ -485,6 +493,7 @@ setInterval(() => {
 
 function addEv(ev) {
   ev.ts = ev.ts || Date.now();
+  if (ev.kind === 'in' && ev.replyTo) settlePending(ev.replyTo);
   feedCrew(ev);
   events.push(ev);
   if (events.length > 500) events.shift();
@@ -505,7 +514,7 @@ renderFilters();
 
 // Keep relative stamps honest while the tab sits open.
 setInterval(() => {
-  for (const m of feed.querySelectorAll('.meta[data-ts]')) {
+  for (const m of feed.querySelectorAll('.ev:not(.pending) .meta[data-ts]')) {
     const [who] = m.textContent.split(' · ');
     m.textContent = who + ' · ' + rel(Number(m.dataset.ts));
   }
@@ -689,13 +698,33 @@ function toast(text, tone) {
 
 // One send path for the form and the chips: pending state on the button,
 // failures go to a toast — the feed stays a conversation, not an error log.
+// Optimistic echo: the bubble appears at the tap, dimmed and 'sending…', and
+// the server's own 'in' event (tagged replyTo = say id) replaces it. Through
+// the tunnel that gap was ~300 ms of nothing after pressing send.
+const pendingSends = new Map(); // local id → node
+function settlePending(sayId) {
+  const node = pendingSends.get(sayId);
+  if (node) { node.remove(); pendingSends.delete(sayId); }
+}
 async function send(text) {
   const btn = document.getElementById('sendBtn');
   btn.disabled = true;
   btn.textContent = '…';
+  const localId = 'p' + Date.now();
+  const stick = atBottom();
+  const node = evNode({ kind: 'in', who: 'you', text, ts: Date.now(), pending: true });
+  feed.appendChild(node);
+  pendingSends.set(localId, node);
+  if (stick) feed.scrollTop = feed.scrollHeight;
   try {
-    await post('/api/say', { text });
+    const r = await post('/api/say', { text });
+    // re-key under the server's id so the SSE 'in' can settle it; if the
+    // event already arrived (fast local), settle now.
+    pendingSends.delete(localId);
+    if (feed.querySelector('.ev.in:not(.pending)[data-reply-to="' + r.id + '"]')) node.remove();
+    else pendingSends.set(r.id, node);
   } catch (err) {
+    node.remove(); pendingSends.delete(localId);
     toast('send failed: ' + err.message);
   } finally {
     btn.disabled = false;

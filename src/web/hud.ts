@@ -65,7 +65,7 @@ export function vitalsModel(t: any, now: number, staleMs?: number): Vitals {
  * everything else. Only lines that carry an alarm word stay red.
  */
 export function systemTone(text: string): 'alert' | 'quiet' {
-  return /\b(error|fail(ed|ure)?|kicked|died|death|stop(ped)?|crash|oom|🚨|⛔|intruder|disconnect)/i.test(text || '') ? 'alert' : 'quiet';
+  return /\b(error|fail(ed|ure)?|kicked|died|death|stop(ped)?|crash|oom|stuck|dropped|🚨|⛔|intruder|disconnect)/i.test(text || '') ? 'alert' : 'quiet';
 }
 
 export interface InvRow { name: string; label: string; count: number; held: boolean }
@@ -90,4 +90,20 @@ export function crewTitle(c: { kind: string; name: string; goal?: string | null;
   var goal = (c.goal || '').trim();
   if (!goal) return { title: c.name, sub: '#' + (c.steps || 0) };
   return { title: goal.length > 90 ? goal.slice(0, 87) + '\u2026' : goal, sub: c.name + ' \u00b7 #' + (c.steps || 0) };
+}
+
+/**
+ * 🧹 What a feed row shows. The agent's INPUT echo carries rail prefixes meant
+ * for the model, not the reader: "(from X via the web dashboard) status?" and
+ * 'X says in game chat: "hi"' — the latter is a duplicate of the `chat` row
+ * that arrived a moment earlier. Returns null when the row should not render.
+ */
+export function displayText(ev: { kind: string; who?: string; text: string }, chatShown: boolean): string | null {
+  var t = ev.text || '';
+  if (ev.kind !== 'in') return t;
+  var web = /^\(from [^)]+ via the web dashboard\) /.exec(t);
+  if (web) return t.slice(web[0].length);
+  var game = /^(.+?) says in game chat: "([\s\S]*)"$/.exec(t);
+  if (game) return chatShown ? null : game[1] + ': ' + game[2];
+  return t;
 }
