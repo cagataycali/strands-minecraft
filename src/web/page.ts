@@ -9,6 +9,8 @@
  *  - Dark, quiet, thumb-reachable input. The video is the hero; the feed
  *    scrolls under it; the composer sticks to the bottom above the keyboard.
  */
+import { veilFor } from './veil.js';
+
 export const PAGE_HTML = /* html */ `<!doctype html>
 <html lang="en">
 <head>
@@ -39,7 +41,7 @@ export const PAGE_HTML = /* html */ `<!doctype html>
          font-size:12px; font-variant-numeric:tabular-nums; color:#dce3ea;
          text-shadow:0 1px 2px rgba(0,0,0,.8); }
   #dot { width:8px; height:8px; border-radius:50%; background:#e5534b; margin-bottom:4px; flex:none; }
-  #dot.ok { background:#3fb950; }
+  #dot.ok { background:#3fb950; } #dot.warn { background:#e3b341; }
   .bar { letter-spacing:1px; font-size:13px; line-height:1.2; }
   #hearts .on { color:#ff5a52; } #food .on { color:#d29922; }
   .bar .off { color:rgba(255,255,255,.25); }
@@ -51,6 +53,8 @@ export const PAGE_HTML = /* html */ `<!doctype html>
             backdrop-filter:blur(2px); -webkit-backdrop-filter:blur(2px); }
   #vstall.show { display:flex; }
   #vstall span { display:flex; align-items:center; gap:8px; }
+  #vstall.warn { color:#e3b341; } #vstall.bad { color:#ff7b72; }
+  #vstall .spin.off { display:none; }
   .spin { width:14px; height:14px; border:2px solid #2a3242; border-top-color:#58a6ff;
           border-radius:50%; animation:spin 1s linear infinite; }
   @keyframes spin { to { transform:rotate(360deg); } }
@@ -167,7 +171,7 @@ export const PAGE_HTML = /* html */ `<!doctype html>
 </div>
 <div id="stage">
   <img id="video" alt="">
-  <div id="vstall"><span><span class="spin"></span>reconnecting…</span></div>
+  <div id="vstall" role="status"><span><span class="spin"></span><span id="vtext"></span></span></div>
   <div id="hud">
     <span id="dot"></span>
     <div>
@@ -241,6 +245,8 @@ async function login(pre) {
     },
   }});
 }
+
+${veilFor.toString()}
 
 const feed = document.getElementById('feed');
 const jump = document.getElementById('jump');
@@ -456,56 +462,88 @@ function glyphBar(el, count, glyph) {
 // purpose (each watcher costs headless-Chrome screenshots + tunnel bytes).
 const video = document.getElementById('video');
 const vstall = document.getElementById('vstall');
-let streaming = false, lastFrames = -1, stillPolls = 0;
+const vtext = document.getElementById('vtext');
+let streaming = false, lastFrames = -1, stillPolls = 0, imgError = false, framesAtStart = null;
+let botConnected = null, lastState = null;
+
+function showVeil(v) {
+  vstall.classList.toggle('show', v.show);
+  vstall.classList.toggle('warn', v.tone === 'warn');
+  vstall.classList.toggle('bad', v.tone === 'bad');
+  vstall.querySelector('.spin').classList.toggle('off', !v.spin);
+  vtext.textContent = v.text;
+}
 
 function startStream() {
   streaming = true;
   stillPolls = 0;
+  imgError = false;
+  framesAtStart = null;
   video.src = '/stream.mjpeg?t=' + Date.now();
+  showVeil(veilFor({ noFrameYet: true })); // until the first poll says otherwise
 }
 function stopStream() {
   streaming = false;
   video.removeAttribute('src');
 }
-video.addEventListener('error', () => { if (streaming) vstall.classList.add('show'); });
+video.addEventListener('error', () => { if (streaming) { imgError = true; showVeil(veilFor({ connected: botConnected, camera: lastState && lastState.camera, imgError: true })); } });
 
 document.addEventListener('visibilitychange', () => {
   if (!connected) return;
   if (document.visibilityState === 'hidden') stopStream();
-  else { vstall.classList.remove('show'); startStream(); }
+  else startStream();
 });
 
+function paintDot() {
+  const dot = document.getElementById('dot');
+  dot.classList.toggle('ok', sseOpen && botConnected !== false);
+  dot.classList.toggle('warn', sseOpen && botConnected === false);
+  dot.title = !sseOpen ? 'feed disconnected' : botConnected === false ? 'bot is not in the world' : 'live';
+}
+
 async function pollState() {
-  try {
-    const s = await (await fetch('/api/state')).json();
-    glyphBar(document.getElementById('hearts'), s.health ?? 0, '\\u2665');
-    glyphBar(document.getElementById('food'), s.food ?? 0, '\\uD83C\\uDF57');
-    document.getElementById('coords').textContent = s.position
-      ? Math.round(s.position.x) + ' ' + Math.round(s.position.y) + ' ' + Math.round(s.position.z) : '';
-    document.getElementById('watchers').textContent =
-      (s.watchers ?? 0) + ' watching \\u00b7 ' + (s.username ?? '');
-    seedCrew(s.work);
-    if (streaming && document.visibilityState === 'visible') {
-      if (typeof s.frames === 'number' && s.frames === lastFrames) {
-        if (++stillPolls >= 2) { vstall.classList.add('show'); startStream(); }
-      } else {
-        stillPolls = 0;
-        vstall.classList.remove('show');
-      }
-      lastFrames = s.frames;
+  let s;
+  try { s = await (await fetch('/api/state')).json(); }
+  catch {
+    // state unreachable = tunnel or dashboard gone; say so, don't blame the stream
+    if (streaming) showVeil(veilFor({ unreachable: true }));
+    return;
+  }
+  lastState = s;
+  botConnected = typeof s.connected === 'boolean' ? s.connected : null;
+  paintDot();
+  glyphBar(document.getElementById('hearts'), s.health ?? 0, '\\u2665');
+  glyphBar(document.getElementById('food'), s.food ?? 0, '\\uD83C\\uDF57');
+  document.getElementById('coords').textContent = s.position
+    ? Math.round(s.position.x) + ' ' + Math.round(s.position.y) + ' ' + Math.round(s.position.z) : '';
+  document.getElementById('watchers').textContent =
+    (s.watchers ?? 0) + ' watching \\u00b7 ' + (s.username ?? '') + (botConnected === false ? ' \\u00b7 offline' : '');
+  seedCrew(s.work);
+  if (streaming && document.visibilityState === 'visible') {
+    let stalled = false;
+    if (framesAtStart === null) framesAtStart = s.frames;
+    const noFrameYet = typeof s.frames === 'number' && s.frames === framesAtStart;
+    if (typeof s.frames === 'number' && s.frames === lastFrames) {
+      // Frozen counter while warming is the warm-up, not a stall — reload only
+      // once the camera claims to be streaming and still sends nothing.
+      const warming = (s.camera || '').indexOf('warming') === 0;
+      if (++stillPolls >= 2 && !warming) { stalled = true; startStream(); }
+    } else {
+      stillPolls = 0;
     }
-  } catch {
-    if (streaming) vstall.classList.add('show'); // state unreachable = tunnel gone
+    lastFrames = s.frames;
+    showVeil(veilFor({ connected: botConnected, camera: s.camera, stalled, imgError, noFrameYet }));
   }
 }
 
+let sseOpen = false;
 let connected = false;
 function connect() {
   connected = true;
   startStream();
   const es = new EventSource('/events');
-  es.onopen = () => document.getElementById('dot').classList.add('ok');
-  es.onerror = () => document.getElementById('dot').classList.remove('ok');
+  es.onopen = () => { sseOpen = true; paintDot(); };
+  es.onerror = () => { sseOpen = false; paintDot(); };
   es.onmessage = (m) => addEv(JSON.parse(m.data));
   pollState();
   setInterval(pollState, 5000);

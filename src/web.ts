@@ -892,6 +892,10 @@ export function startWeb(
       if (route === 'GET /api/state') {
         return json(res, 200, {
           username: bot.username,
+          // The body is in the world. The page's veil needs this next to the
+          // camera sentence: a kicked bot and a stalled stream look identical
+          // from an <img>, and used to get the same "reconnecting…".
+          connected: !!bot.entity,
           health: bot.health,
           food: bot.food,
           position: bot.entity?.position,
