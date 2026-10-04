@@ -21,6 +21,7 @@
  * telemetry shaper take plain objects so the tests never need a bot.
  */
 import crypto from 'node:crypto';
+import { oxygenReading } from '../tools/helpers.js';
 import type { Bot } from 'mineflayer';
 
 export const TINY_TOKEN_MIN = 32;
@@ -185,9 +186,12 @@ export function shapeTelemetry(bot: Partial<Bot> & { username?: string }, extra:
     const b = ent?.position && bot.blockAt ? bot.blockAt(ent.position) : null;
     biome = (b as unknown as { biome?: { name?: string } } | null)?.biome?.name ?? null;
   } catch { biome = null; }
-  // oxygenLevel: 0/-1 on land (full), 0-300 underwater → bubbles of 20 like get_status.
-  const o2 = bot.oxygenLevel;
-  const air = ent ? (o2 === undefined || o2 <= 0 ? 20 : Math.round((o2 / 300) * 20)) : null;
+  // Bubbles of 20. mineflayer's oxygenLevel is air_supply/15 (20 = full on land
+  // AND at the surface), occasionally the raw ticks (300+) — oxygenReading
+  // normalises both. The old `o2/300*20` read a full bar on dry land as 1/20
+  // and the fixture's live capture as 27/20.
+  const o2 = oxygenReading(bot.oxygenLevel);
+  const air = ent ? (o2 ? o2.units : 20) : null;
 
   return {
     name: bot.username ?? 'StrandsBot',

@@ -67,3 +67,27 @@ export function vitalsModel(t: any, now: number, staleMs?: number): Vitals {
 export function systemTone(text: string): 'alert' | 'quiet' {
   return /\b(error|fail(ed|ure)?|kicked|died|death|stop(ped)?|crash|oom|🚨|⛔|intruder|disconnect)/i.test(text || '') ? 'alert' : 'quiet';
 }
+
+export interface InvRow { name: string; label: string; count: number; held: boolean }
+/**
+ * 🎒 The bag, from telemetry.inventory (name+count, already merged per item)
+ * and telemetry.held ('torch x64'). Sorted by count, human labels, the held
+ * item first and marked.
+ */
+export function inventoryModel(items: Array<{ name: string; count: number }> | null | undefined, held?: string | null): { rows: InvRow[]; total: number; stacks: number } {
+  var heldName = held ? String(held).replace(/ x\d+$/, '') : '';
+  var rows: InvRow[] = (items || []).filter(function (i) { return i && i.name && i.count > 0; }).map(function (i) {
+    return { name: i.name, label: i.name.replace(/_/g, ' '), count: i.count, held: i.name === heldName };
+  });
+  rows.sort(function (a, b) { return (b.held ? 1 : 0) - (a.held ? 1 : 0) || b.count - a.count || (a.name < b.name ? -1 : 1); });
+  var total = 0;
+  for (var k = 0; k < rows.length; k++) total += rows[k].count;
+  return { rows: rows, total: total, stacks: rows.length };
+}
+
+/** Card title/subtitle for a journey or worker: the GOAL, not the random id. */
+export function crewTitle(c: { kind: string; name: string; goal?: string | null; steps?: number }): { title: string; sub: string } {
+  var goal = (c.goal || '').trim();
+  if (!goal) return { title: c.name, sub: '#' + (c.steps || 0) };
+  return { title: goal.length > 90 ? goal.slice(0, 87) + '\u2026' : goal, sub: c.name + ' \u00b7 #' + (c.steps || 0) };
+}

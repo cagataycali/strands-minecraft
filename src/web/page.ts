@@ -10,7 +10,7 @@
  *    scrolls under it; the composer sticks to the bottom above the keyboard.
  */
 import { veilFor } from './veil.js';
-import { stopReceipt, mcClock, vitalsModel, systemTone } from './hud.js';
+import { stopReceipt, mcClock, vitalsModel, systemTone, inventoryModel, crewTitle } from './hud.js';
 
 export const PAGE_HTML = /* html */ `<!doctype html>
 <html lang="en">
@@ -76,6 +76,18 @@ export const PAGE_HTML = /* html */ `<!doctype html>
   .vchip b { color:#8b98a5; font-weight:500; margin-right:5px; text-transform:uppercase; font-size:10px; letter-spacing:.5px; }
   .vchip.warn { border-color:#5a4a1a; color:#e3b341; } .vchip.bad { border-color:#6e2c31; color:#ff7b72; }
   #stage.full #vitals { display:none; }
+  #vitals { position:relative; }
+  #invBtn { position:absolute; right:10px; top:5px; background:none; border:1px solid #2a3242; color:#aeb8c2;
+            border-radius:8px; padding:3px 9px; font-size:11px; font-weight:600; min-height:24px; }
+  #invBtn[aria-expanded="true"] { background:#1c2230; color:#dce3ea; }
+  #inv { display:grid; grid-template-columns:repeat(auto-fill, minmax(96px, 1fr)); gap:4px; padding-top:4px; }
+  #inv[hidden] { display:none; }
+  .slot { display:flex; justify-content:space-between; gap:6px; background:#10141c; border:1px solid #1c2230;
+          border-radius:6px; padding:3px 7px; font-size:11px; color:#aeb8c2; white-space:nowrap; overflow:hidden; }
+  .slot span { overflow:hidden; text-overflow:ellipsis; }
+  .slot b { color:#dce3ea; font-variant-numeric:tabular-nums; }
+  .slot.held { border-color:#1f6feb; color:#dce3ea; }
+  .slot.empty { grid-column:1/-1; color:#8b98a5; justify-content:center; }
   #vstall { position:absolute; inset:0; display:none; align-items:center; justify-content:center;
             background:rgba(11,14,20,.55); color:#aeb8c2; font-size:13px; letter-spacing:.3px;
             backdrop-filter:blur(2px); -webkit-backdrop-filter:blur(2px); }
@@ -138,6 +150,8 @@ export const PAGE_HTML = /* html */ `<!doctype html>
   .card .csteps { color:#8b98a5; font-weight:400; }
   .card .cline { color:#8b98a5; margin-top:2px; overflow:hidden; display:-webkit-box;
                  -webkit-line-clamp:2; -webkit-box-orient:vertical; }
+  .card .ctitle { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; }
+  .card .csub { color:#8b98a5; font-size:11px; font-weight:400; margin-top:1px; }
   #chips { display:flex; gap:8px; overflow-x:auto; padding:8px 14px 0; background:#10141c;
            border-top:1px solid #1c2230; -webkit-overflow-scrolling:touch; scrollbar-width:none; }
   #chips::-webkit-scrollbar { display:none; }
@@ -224,6 +238,8 @@ export const PAGE_HTML = /* html */ `<!doctype html>
   <div id="vitals" aria-live="polite" aria-label="bot vitals">
     <div id="vstate">no telemetry yet</div>
     <div id="vchips" tabindex="0" aria-label="vitals"></div>
+    <button id="invBtn" type="button" aria-expanded="false" aria-controls="inv">\uD83C\uDF92 bag</button>
+    <div id="inv" aria-label="inventory" hidden></div>
   </div>
 </div>
 <main id="side">
@@ -294,6 +310,8 @@ ${stopReceipt.toString()}
 ${mcClock.toString()}
 ${vitalsModel.toString()}
 ${systemTone.toString()}
+${inventoryModel.toString()}
+${crewTitle.toString()}
 
 const feed = document.getElementById('feed');
 const jump = document.getElementById('jump');
@@ -395,13 +413,14 @@ function renderCrew() {
     card.className = 'card ' + c.kind;
     const top = document.createElement('div');
     top.className = 'cname';
-    const n = document.createElement('span'); n.textContent = name;
-    const st = document.createElement('span'); st.className = 'csteps'; st.textContent = '#' + c.steps;
-    top.appendChild(n); top.appendChild(st);
+    const t = crewTitle({ kind: c.kind, name, goal: c.goal, steps: c.steps });
+    const n = document.createElement('span'); n.className = 'ctitle'; n.textContent = t.title; n.title = t.title;
+    top.appendChild(n);
+    const sub = document.createElement('div'); sub.className = 'csub'; sub.textContent = t.sub;
     const line = document.createElement('div');
     line.className = 'cline';
     line.textContent = c.line;
-    card.appendChild(top); card.appendChild(line);
+    card.appendChild(top); card.appendChild(sub); card.appendChild(line);
     crewEl.appendChild(card);
   }
   crewEl.classList.toggle('has', crew.size > 0);
@@ -412,7 +431,8 @@ function feedCrew(ev) {
   if (Date.now() - ev.ts > 180000) return; // SSE backfill: don't resurrect finished work
   const m = /^(.+?) #(\\d+)$/.exec(ev.who || '');
   if (!m) return;
-  crew.set(m[1], { kind: ev.kind, steps: Number(m[2]), line: ev.text, ts: ev.ts });
+  const prev = crew.get(m[1]);
+  crew.set(m[1], { kind: ev.kind, steps: Number(m[2]), line: ev.text, ts: ev.ts, goal: prev && prev.goal });
   renderCrew();
 }
 
@@ -426,16 +446,16 @@ const CREW_MARK = { done: '\u2705 done \u00b7 ', failed: '\u2716 failed \u00b7 '
 function seedCrew(work) {
   if (!work) return;
   const seen = new Set();
-  const seed = (name, kind, steps, line, status) => {
+  const seed = (name, kind, steps, line, status, goal) => {
     seen.add(name);
     const terminal = !!CREW_MARK[status];
     const cur = crew.get(name);
     // A status CHANGE always wins, even at the same step count: a worker that
     // just finished reports ON the step it finished, and that report is the
     // whole point of the card (live soak: the finish used to be invisible).
-    if (cur && cur.steps >= steps && !(terminal && !cur.terminal)) return; // event feed is ahead
+    if (cur && cur.steps >= steps && !(terminal && !cur.terminal)) { if (goal && !cur.goal) { cur.goal = goal; } return; } // event feed is ahead
     crew.set(name, {
-      kind, steps, terminal,
+      kind, steps, terminal, goal: goal || (cur && cur.goal),
       line: (CREW_MARK[status] || '') + (line || status),
       // A terminal card keeps its FIRST timestamp so the 3-minute sweeper still
       // retires it: /api/state now holds an outcome for 10 minutes, which must
@@ -444,8 +464,8 @@ function seedCrew(work) {
     });
   };
   if (work.journey && (work.journey.status === 'running' || work.journey.status === 'interrupted'))
-    seed(work.journey.id, 'journey', work.journey.step, work.journey.last, work.journey.status);
-  for (const w of work.workers || []) seed(w.name, 'worker', w.steps, w.reason || w.last || w.task, w.status);
+    seed(work.journey.id, 'journey', work.journey.step, work.journey.last, work.journey.status, work.journey.goal);
+  for (const w of work.workers || []) seed(w.name, 'worker', w.steps, w.reason || w.last || w.task, w.status, w.task);
   for (const [name, c] of [...crew]) {
     // Ledger says this work is over — but let a FRESH card linger: its last
     // line is the terminal report ('done: built the cabin'), worth reading
@@ -604,12 +624,37 @@ function paintVitals() {
     box.appendChild(el);
   }
 }
+const invEl = document.getElementById('inv');
+const invBtn = document.getElementById('invBtn');
+let invOpen = localStorage.mcInv ? localStorage.mcInv === '1' : matchMedia('(min-width: 900px)').matches;
+function paintInv() {
+  invBtn.setAttribute('aria-expanded', invOpen ? 'true' : 'false');
+  invEl.hidden = !invOpen;
+  const inv = inventoryModel(lastTelemetry && lastTelemetry.inventory, lastTelemetry && lastTelemetry.held);
+  invBtn.textContent = '\uD83C\uDF92 ' + (inv.stacks ? inv.stacks + ' stacks \u00b7 ' + inv.total : 'bag');
+  if (!invOpen) return;
+  invEl.innerHTML = '';
+  if (!inv.rows.length) {
+    const e = document.createElement('div'); e.className = 'slot empty'; e.textContent = lastTelemetry ? 'empty hands, empty bag' : 'no telemetry yet';
+    invEl.appendChild(e); return;
+  }
+  for (const r of inv.rows) {
+    const el = document.createElement('div'); el.className = 'slot' + (r.held ? ' held' : '');
+    el.title = r.label + (r.held ? ' (in hand)' : '');
+    const n = document.createElement('span'); n.textContent = (r.held ? '\u270B ' : '') + r.label;
+    const c = document.createElement('b'); c.textContent = r.count;
+    el.appendChild(n); el.appendChild(c); invEl.appendChild(el);
+  }
+}
+invBtn.addEventListener('click', (e) => { e.stopPropagation(); invOpen = !invOpen; localStorage.mcInv = invOpen ? '1' : '0'; paintInv(); });
+
 async function pollTelemetry() {
   try {
     lastTelemetry = await (await fetch('/api/telemetry')).json();
     telemetryAt = Date.now();
   } catch { /* stale marker takes over after 15 s */ }
   paintVitals();
+  paintInv();
 }
 vitalsEl.addEventListener('click', (e) => e.stopPropagation()); // not a fullscreen tap
 let connected = false;

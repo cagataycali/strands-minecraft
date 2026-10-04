@@ -89,7 +89,7 @@ function fakeBot(o: { inWorld?: boolean } = {}) {
   bot.username = 'StrandsBot';
   bot.health = 17.73;
   bot.food = 14;
-  bot.oxygenLevel = 0;
+  bot.oxygenLevel = 20; // mineflayer: air_supply/15 — 20 is a full bar on land (was 0, the pre-/15 assumption)
   bot.experience = { level: 3 };
   bot.time = { age: 24_000 * 12 + 6_000, timeOfDay: 6_000, isDay: true };
   bot.isRaining = false;
@@ -302,4 +302,12 @@ test('chromeGlArgs: SwiftShader in a Linux container (no GPU → no WebGL → wh
   assert.ok(chromeGlArgs({}, 'linux').includes('--use-angle=swiftshader'));
   assert.ok(chromeGlArgs({}, 'linux').includes('--enable-unsafe-swiftshader'));
   assert.deepEqual(chromeGlArgs({ CHROME_ARGS: '--use-gl=egl  --foo' }, 'linux'), ['--use-gl=egl', '--foo']);
+});
+
+test('shapeTelemetry: air is bubbles of 20 on every scale mineflayer uses (dry land 20 → 20, not 1; raw ticks 300 → 20; 150 ticks → 10; 3 → 3)', () => {
+  const b = fakeBot();
+  for (const [raw, want] of [[20, 20], [300, 20], [150, 10], [3, 3], [-2, 0], [405, 20]] as Array<[number, number]>) {
+    b.oxygenLevel = raw;
+    assert.equal(tiny.shapeTelemetry(b).air, want, `oxygenLevel ${raw}`);
+  }
 });
