@@ -10,7 +10,7 @@
  *    scrolls under it; the composer sticks to the bottom above the keyboard.
  */
 import { veilFor } from './veil.js';
-import { stopReceipt } from './hud.js';
+import { stopReceipt, mcClock, vitalsModel } from './hud.js';
 
 export const PAGE_HTML = /* html */ `<!doctype html>
 <html lang="en">
@@ -31,11 +31,13 @@ export const PAGE_HTML = /* html */ `<!doctype html>
   body { background:#0b0e14; color:#dce3ea; font:15px/1.45 -apple-system,system-ui,sans-serif;
          display:flex; flex-direction:column; height:100dvh; }
   /* The video IS the header: vitals live on it, tap toggles fullscreen. */
-  #stage { position:relative; padding-top:env(safe-area-inset-top); background:#000; }
+  #stage { padding-top:env(safe-area-inset-top); background:#000; }
+  #view { position:relative; } /* the HUD and the veil anchor to the VIDEO, not the strip below it */
   #video { width:100%; aspect-ratio:16/9; background:#000; object-fit:cover; display:block; }
   #stage.full { position:fixed; inset:0; z-index:50; display:flex; flex-direction:column;
                 justify-content:center; padding-top:0; }
-  #stage.full #video { aspect-ratio:auto; height:100%; object-fit:contain; }
+  #stage.full #view { flex:1; min-height:0; display:flex; flex-direction:column; justify-content:center; }
+  #stage.full #video { aspect-ratio:auto; height:100%; min-height:0; object-fit:contain; }
   #hud { position:absolute; left:0; right:0; bottom:0; padding:26px 12px 8px;
          background:linear-gradient(transparent, rgba(0,0,0,.75));
          display:flex; align-items:flex-end; gap:12px; pointer-events:none;
@@ -58,6 +60,22 @@ export const PAGE_HTML = /* html */ `<!doctype html>
              text-shadow:none; margin-bottom:2px; }
   #stopBtn:active, #stopBtn.busy { background:#e5534b; }
   #stopBtn:disabled { opacity:.6; }
+  /* Vitals strip under the video — the body card's state line + chips from
+     /api/telemetry (time, weather, where, xp, air, held, hostiles, players).
+     Mono numbers; a stale sample is dimmed and says so. */
+  #vitals { background:#0b0e14; border-top:1px solid #1c2230; padding:7px 14px 8px; font-size:12px;
+            display:flex; flex-direction:column; gap:5px; cursor:default; }
+  #vitals.stale { opacity:.55; }
+  #vstate { color:#dce3ea; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  #vstate::before { content:'\u25B8 '; color:#58a6ff; }
+  #vitals.stale #vstate::after { content:' \u00b7 stale'; color:#e3b341; font-weight:400; }
+  #vchips { display:flex; gap:6px; overflow-x:auto; scrollbar-width:none; -webkit-overflow-scrolling:touch; }
+  #vchips::-webkit-scrollbar { display:none; }
+  .vchip { flex:none; border:1px solid #2a3242; border-radius:8px; padding:2px 8px; color:#aeb8c2;
+           font-variant-numeric:tabular-nums; font-feature-settings:'tnum'; }
+  .vchip b { color:#66707c; font-weight:500; margin-right:5px; text-transform:uppercase; font-size:10px; letter-spacing:.5px; }
+  .vchip.warn { border-color:#5a4a1a; color:#e3b341; } .vchip.bad { border-color:#6e2c31; color:#ff7b72; }
+  #stage.full #vitals { display:none; }
   #vstall { position:absolute; inset:0; display:none; align-items:center; justify-content:center;
             background:rgba(11,14,20,.55); color:#aeb8c2; font-size:13px; letter-spacing:.3px;
             backdrop-filter:blur(2px); -webkit-backdrop-filter:blur(2px); }
@@ -161,9 +179,12 @@ export const PAGE_HTML = /* html */ `<!doctype html>
   @media (min-width: 900px) {
     body { display:grid; grid-template-columns:minmax(0,1fr) clamp(360px, 32vw, 460px);
            grid-template-rows:100dvh; }
-    #stage { display:flex; flex-direction:column; justify-content:center; min-height:0;
-             padding-top:0; }
+    #stage { display:flex; flex-direction:column; min-height:0; padding-top:0; }
+    #view { flex:1; min-height:0; display:flex; flex-direction:column; justify-content:center; }
     #video { flex:1; min-height:0; aspect-ratio:auto; object-fit:contain; }
+    #hud { bottom:auto; top:0; padding:8px 12px 26px; align-items:flex-start;
+           background:linear-gradient(rgba(0,0,0,.75), transparent); }
+    #vitals { padding:9px 16px 10px; }
     #stage:not(.full) { cursor:zoom-in; }
     #side { display:flex; flex-direction:column; min-height:0; position:relative;
             background:#0b0e14; border-left:1px solid #1c2230; }
@@ -181,6 +202,7 @@ export const PAGE_HTML = /* html */ `<!doctype html>
   <button id="gateBtn" style="display:none"></button>
 </div>
 <div id="stage">
+  <div id="view">
   <img id="video" alt="">
   <div id="vstall" role="status"><span><span class="spin"></span><span id="vtext"></span></span></div>
   <div id="hud">
@@ -194,6 +216,11 @@ export const PAGE_HTML = /* html */ `<!doctype html>
       <div id="watchers"></div>
     </div>
     <button id="stopBtn" type="button" aria-label="Stop the bot: halt movement, digging and the journey" title="Stop — reflex, no model turn">STOP</button>
+  </div>
+  </div>
+  <div id="vitals" aria-live="polite" aria-label="bot vitals">
+    <div id="vstate">no telemetry yet</div>
+    <div id="vchips"></div>
   </div>
 </div>
 <div id="side">
@@ -260,6 +287,8 @@ async function login(pre) {
 
 ${veilFor.toString()}
 ${stopReceipt.toString()}
+${mcClock.toString()}
+${vitalsModel.toString()}
 
 const feed = document.getElementById('feed');
 const jump = document.getElementById('jump');
@@ -550,6 +579,33 @@ async function pollState() {
 }
 
 let sseOpen = false;
+
+// ── vitals ───────────────────────────────────────────────────────────────
+const vitalsEl = document.getElementById('vitals');
+let lastTelemetry = null, telemetryAt = 0;
+function paintVitals() {
+  const v = vitalsModel(lastTelemetry, Date.now());
+  // stale = the SAMPLE is old (server clock) or our last successful fetch is
+  vitalsEl.classList.toggle('stale', v.stale || Date.now() - telemetryAt > 15000);
+  document.getElementById('vstate').textContent = v.state;
+  const box = document.getElementById('vchips');
+  box.innerHTML = '';
+  for (const c of v.chips) {
+    const el = document.createElement('span');
+    el.className = 'vchip' + (c.tone ? ' ' + c.tone : '');
+    const k = document.createElement('b'); k.textContent = c.k;
+    el.appendChild(k); el.appendChild(document.createTextNode(c.v));
+    box.appendChild(el);
+  }
+}
+async function pollTelemetry() {
+  try {
+    lastTelemetry = await (await fetch('/api/telemetry')).json();
+    telemetryAt = Date.now();
+  } catch { /* stale marker takes over after 15 s */ }
+  paintVitals();
+}
+vitalsEl.addEventListener('click', (e) => e.stopPropagation()); // not a fullscreen tap
 let connected = false;
 function connect() {
   connected = true;
@@ -559,7 +615,9 @@ function connect() {
   es.onerror = () => { sseOpen = false; paintDot(); };
   es.onmessage = (m) => addEv(JSON.parse(m.data));
   pollState();
+  pollTelemetry();
   setInterval(pollState, 5000);
+  setInterval(pollTelemetry, 5000);
 }
 
 // Tap the video for a fullscreen takeover (CSS, not the Fullscreen API —
