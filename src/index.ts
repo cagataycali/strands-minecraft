@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import { PeerChat, peerOptionsFromEnv, peerMode } from './peerchat.js';
 import readline from 'node:readline';
 import { createLiveBody } from './body.js';
 import { botCreateOptions } from './bot.js';
@@ -353,6 +354,17 @@ const main = async () => {
   // wearing a player's name and buys a whole forked turn. 'messagestr' keeps
   // the packet's position and sender uuid, which is the actual truth — see
   // src/chatrail.ts.
+  const peerChat = new PeerChat(peerOptionsFromEnv());
+  const peerTick = setInterval(() => {
+    const f = peerChat.flush(Date.now());
+    if (f.kind === 'none') return;
+    if (f.kind === 'note') { queueNote(f.note); console.log(`🤝 peers: ${f.lines.length} line(s) noted, streak cap — quiet until a human speaks`); return; }
+    console.log(`🤝 peers: answering ${f.lines.length} line(s) as one turn (streak ${peerChat.currentStreak}/${peerChat.opts.maxStreak})`);
+    web?.log('system', 'peers', `one turn for ${f.lines.length} peer line(s)`);
+    void run(f.prompt, { chat: true });
+  }, 1_000);
+  peerTick.unref?.();
+
   body.onEachBot((b) => {
     // mineflayer's typings stop at 3 params; the runtime emits
     // (text, position, jsonMsg, senderUuid, verified) — the last two are the
@@ -369,11 +381,14 @@ const main = async () => {
       });
       if (verdict.kind === 'self') return;
       if (verdict.kind === 'peer') {
-        // A crew bot said something. Log it so it's visible, but NEVER buy a
-        // turn on it — bot↔bot chat is what cascades into a runaway loop and
-        // burns the shared model quota. Humans still get a turn (below).
+        // Another agent said something. Never a turn per line (that cascaded
+        // into a 56-turn loop on 2026-10-04): the line goes into the peer
+        // batcher — debounced 1 s, at most one turn per 5 s, a streak cap that
+        // drops to the free notes rail until a human speaks. PEER_CHAT=mute =
+        // log only. See src/peerchat.ts.
         console.log(`🤖 <${verdict.username}> ${verdict.text}`);
         web?.log('chat', verdict.username, verdict.text);
+        if (peerMode() !== 'mute') peerChat.push(verdict.username, verdict.text, Date.now());
         return;
       }
       if (verdict.kind === 'system') {
@@ -387,6 +402,7 @@ const main = async () => {
       }
       console.log(`💬 <${verdict.username}> ${verdict.text}`);
       web?.log('chat', verdict.username, verdict.text);
+      peerChat.humanSpoke(); // a human line re-anchors the room; peers may be answered again
       void run(buildChatPrompt(verdict.username, verdict.text, verdict.verified), { chat: true });
     };
     b.on('messagestr', onMessage as Parameters<typeof b.on<'messagestr'>>[1]);

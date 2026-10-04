@@ -243,8 +243,11 @@ talks straight into the session — phone-first, installable (Add to Home Screen
   (the first frame takes ~30 s) → *stream stalled* → *camera broken: …* → *bot is not in the
   world* → *dashboard unreachable*. The dot is green (live), amber (feed up, body out of the
   world) or red (feed down).
-- **Second bot in the same world?** Put the other bots in `PEER_BOTS` on *both* sides — two bots
-  that read each other as humans chat forever and buy a model turn per line.
+- **Second bot in the same world?** Put the other bots in `PEER_BOTS` on *both* sides. Peers are then
+  heard *slowly* (`src/peerchat.ts`): their lines are batched — 1 s debounce so a three-line reply is one
+  turn, at most one peer turn per 5 s, and after 3 exchanges with no human in between the bot goes quiet
+  (peer lines ride the free notes rail) until a human speaks or 2 min pass. Two bots that read each
+  other as humans chat forever and buy a model turn per line; `PEER_CHAT=mute` logs them and never answers.
 - axe: 0 violations on phone and desktop (contrast AA, landmarks, keyboard-reachable scrollers).
 
 ```bash
@@ -315,7 +318,7 @@ npx strands-minecraft ls          # ports, pid, in world?, public url, enrolled?
 family ≥ `--ports` (default `3208/3207`) → `instances/<Name>.env` (gitignored, `0600`: username, ports,
 `MEMORY_DIR ~/.strands-minecraft-<name>`, own passkey store, fresh 64-hex `TINY_TOKEN`, `PEER_BOTS`,
 `MINECRAFT_PUBLIC_URL`; everything else inherits `.env`, `--server host:port` overrides the world) →
-**`PEER_BOTS` rewritten on every instance** so no two bots ever answer each other (running ones keep the
+**`PEER_BOTS` rewritten on every instance** so bots talk to each other slowly, never per line (running ones keep the
 old list until *you* restart them — `add` says which) → `--tunnel`: ingress rule before the
 `http_status:404` catch-all in `~/.cloudflared/<name>.yml`, `route dns`, LaunchAgent kickstart → detached
 start (`logs/<Name>.log`, waits ≤60 s for `mc.connected`; `--no-start` / `start <Name>`) → `--enroll`:
