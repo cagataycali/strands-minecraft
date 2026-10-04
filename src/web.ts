@@ -727,10 +727,11 @@ export function startWeb(
   };
   const workerCameraLine = (w: Worker, now = Date.now()) => {
     const c = workerCams.get(w.id);
-    return describeWorkerCamera({
-      alive: !!w.body && (w.status === 'working' || w.status === 'connecting'),
-      frames: c?.frames ?? 0, watchers: c?.clients.size ?? 0, error: c?.error, warmingSince: c?.warmingSince, now,
-    });
+    const frames = c?.frames ?? 0, watchers = c?.clients.size ?? 0;
+    return {
+      ...describeWorkerCamera({ alive: !!w.body && (w.status === 'working' || w.status === 'connecting'), connecting: !w.body && w.status === 'connecting', frames, watchers, error: c?.error, warmingSince: c?.warmingSince, now }),
+      frames, watchers,
+    };
   };
   const rowOf = (w: Worker, now = Date.now()): WorkerRow => workerRow(w, workerCameraLine(w, now), now);
 

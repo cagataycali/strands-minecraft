@@ -107,3 +107,44 @@ export function displayText(ev: { kind: string; who?: string; text: string }, ch
   if (game) return chatShown ? null : game[1] + ': ' + game[2];
   return t;
 }
+
+/**
+ * 🎬 What the stage shows: the bot (default) or one of its workers (CREW.md —
+ * tap a crew card to swap). One place decides the stream URL, the STOP route
+ * and the HUD label, so the swap can never aim STOP at the wrong body.
+ * ES5-safe on purpose: inlined into the page via toString().
+ */
+export function stageModel(stage: { id?: string | null; name?: string | null } | null, bot: string): { src: string; stopPath: string; label: string; worker: boolean; stopAria: string } {
+  var id = stage && stage.id;
+  if (!id) return { src: '/stream.mjpeg', stopPath: '/api/stop', label: bot, worker: false, stopAria: 'Stop the bot: halt movement, digging and the journey' };
+  var name = (stage && stage.name) || id;
+  return {
+    src: '/api/workers/' + encodeURIComponent(id) + '/stream.mjpeg',
+    stopPath: '/api/workers/' + encodeURIComponent(id) + '/stop',
+    label: name + ' (worker)',
+    worker: true,
+    stopAria: 'Stop ' + name + ': halt its movement and digging (the worker keeps its task)',
+  };
+}
+
+/**
+ * The veil's inputs when the stage is on a WORKER: its row from /api/workers
+ * stands in for /api/state. No row = the worker is gone (pruned or never
+ * existed) → the page swaps back to the bot; a dead row says so.
+ */
+export function workerStageState(row: { alive?: boolean; camera?: { why?: string; frames?: number } } | null | undefined): { gone: boolean; connected: boolean; camera: string; frames: number } {
+  if (!row) return { gone: true, connected: false, camera: '', frames: 0 };
+  var cam = (row.camera && row.camera.why) || '';
+  return { gone: false, connected: row.alive !== false, camera: cam, frames: (row.camera && row.camera.frames) || 0 };
+}
+
+/** Which crew thumbnails to refresh this tick: live worker cards only, never while the tab is hidden (each is a Chrome screenshot). */
+export function thumbPlan(cards: Array<{ id?: string | null; kind: string; terminal?: boolean }>, visible: boolean): string[] {
+  if (!visible) return [];
+  var out: string[] = [];
+  for (var i = 0; i < cards.length; i++) {
+    var c = cards[i];
+    if (c.kind === 'worker' && c.id && !c.terminal) out.push(c.id);
+  }
+  return out;
+}

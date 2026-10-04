@@ -33,7 +33,7 @@ test('crew cards show the goal, not the random journey id', () => {
 
 test('the page seeds goals from /api/state and has a bag toggle', () => {
   assert.ok(page.includes('work.journey.goal'), 'journey goal reaches the card');
-  assert.ok(page.includes("seed(w.name, 'worker', w.steps, w.reason || w.last || w.task, w.status, w.task)"), 'worker task reaches the card');
+  assert.ok(page.includes("seed(w.name, 'worker', w.steps, w.reason || w.last || w.task, w.status, w.task, w.id)"), 'worker task + contract id reach the card');
   assert.match(page, /<button id="invBtn"[^>]*aria-expanded="false"[^>]*aria-controls="inv"/);
   assert.ok(page.includes('function inventoryModel('));
 });

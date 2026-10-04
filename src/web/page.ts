@@ -10,7 +10,7 @@
  *    scrolls under it; the composer sticks to the bottom above the keyboard.
  */
 import { veilFor } from './veil.js';
-import { stopReceipt, mcClock, vitalsModel, systemTone, inventoryModel, crewTitle, displayText } from './hud.js';
+import { stopReceipt, mcClock, vitalsModel, systemTone, inventoryModel, crewTitle, displayText, stageModel, workerStageState, thumbPlan } from './hud.js';
 
 export const PAGE_HTML = /* html */ `<!doctype html>
 <html lang="en">
@@ -153,6 +153,23 @@ export const PAGE_HTML = /* html */ `<!doctype html>
                  -webkit-line-clamp:2; -webkit-box-orient:vertical; }
   .card .ctitle { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; }
   .card .csub { color:#8b98a5; font-size:11px; font-weight:400; margin-top:1px; }
+  /* Worker cards are BODIES (CREW.md): a live thumbnail from the worker's own
+     eyes, its own reflex STOP, and a tap swaps the stage to its stream. */
+  .card.worker.live { cursor:pointer; }
+  .card.worker.live:hover, .card.worker.live:focus-visible { border-color:#bc8cff; outline:none; }
+  .card.staged { border-color:#bc8cff; box-shadow:0 0 0 1px #bc8cff inset; }
+  .card .cthumb { display:block; width:100%; aspect-ratio:16/9; object-fit:cover; background:#000;
+                  border-radius:6px; margin-top:6px; }
+  .card .crow { display:flex; align-items:center; justify-content:space-between; gap:6px; margin-top:6px; }
+  .card .cstate { color:#8b98a5; font-size:11px; }
+  .card .cstate.stalled { color:#e3b341; } .card .cstate.working { color:#3fb950; }
+  .card .cstop { flex:none; min-width:44px; height:28px; padding:0 10px; border-radius:8px; background:#b62324;
+                 color:#fff; font-weight:800; font-size:11px; letter-spacing:1px; border:1px solid #ff7b72; }
+  .card .cstop:disabled { opacity:.6; }
+  #stageback { pointer-events:auto; display:none; flex:none; height:44px; padding:0 12px; border-radius:12px;
+               background:rgba(0,0,0,.55); color:#fff; border:1px solid #2a3242; font-weight:600; font-size:13px;
+               text-shadow:none; margin-bottom:2px; }
+  #stageback.show { display:block; }
   #chips { display:flex; gap:8px; overflow-x:auto; padding:8px 14px 0; background:#10141c;
            border-top:1px solid #1c2230; -webkit-overflow-scrolling:touch; scrollbar-width:none; }
   #chips::-webkit-scrollbar { display:none; }
@@ -233,6 +250,7 @@ export const PAGE_HTML = /* html */ `<!doctype html>
       <div id="coords"></div>
       <div id="watchers"></div>
     </div>
+    <button id="stageback" type="button" aria-label="Back to the bot's own camera">\u2190 bot</button>
     <button id="stopBtn" type="button" aria-label="Stop the bot: halt movement, digging and the journey" title="Stop — reflex, no model turn">STOP</button>
   </div>
   </div>
@@ -313,6 +331,9 @@ ${vitalsModel.toString()}
 ${systemTone.toString()}
 ${inventoryModel.toString()}
 ${crewTitle.toString()}
+${stageModel.toString()}
+${workerStageState.toString()}
+${thumbPlan.toString()}
 ${displayText.toString()}
 
 const feed = document.getElementById('feed');
@@ -418,7 +439,8 @@ function renderCrew() {
   crewEl.innerHTML = '';
   for (const [name, c] of crew) {
     const card = document.createElement('div');
-    card.className = 'card ' + c.kind;
+    const live = c.kind === 'worker' && !!c.id && !c.terminal;
+    card.className = 'card ' + c.kind + (live ? ' live' : '') + (c.id && stage.id === c.id ? ' staged' : '');
     const top = document.createElement('div');
     top.className = 'cname';
     const t = crewTitle({ kind: c.kind, name, goal: c.goal, steps: c.steps });
@@ -429,10 +451,52 @@ function renderCrew() {
     line.className = 'cline';
     line.textContent = c.line;
     card.appendChild(top); card.appendChild(sub); card.appendChild(line);
+    if (live) {
+      // The worker's eyes, 1 fps while this tab is visible (refreshThumbs).
+      const img = document.createElement('img');
+      img.className = 'cthumb'; img.alt = name + "'s view"; img.dataset.id = c.id;
+      img.src = thumbCache.get(c.id) || '/api/workers/' + encodeURIComponent(c.id) + '/camera/snapshot?t=' + Date.now();
+      card.appendChild(img);
+      const row = document.createElement('div'); row.className = 'crow';
+      const st = document.createElement('span'); st.className = 'cstate ' + (c.state || ''); st.textContent = c.state || c.kind;
+      const stop = document.createElement('button');
+      stop.type = 'button'; stop.className = 'cstop'; stop.textContent = 'STOP';
+      stop.setAttribute('aria-label', 'Stop ' + name + ': halt its movement and digging');
+      stop.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        stop.disabled = true;
+        try { toast(stopReceipt(await post('/api/workers/' + encodeURIComponent(c.id) + '/stop')), 'ok'); }
+        catch (err) { toast(stopReceipt({ ok: false, error: err.message })); }
+        finally { stop.disabled = false; }
+      });
+      row.appendChild(st); row.appendChild(stop);
+      card.appendChild(row);
+      card.tabIndex = 0;
+      card.setAttribute('role', 'button');
+      card.setAttribute('aria-label', 'Show ' + name + "'s camera on the stage");
+      card.addEventListener('click', () => swapStage(stage.id === c.id ? null : { id: c.id, name }));
+      card.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); card.click(); } });
+    }
     crewEl.appendChild(card);
   }
   crewEl.classList.toggle('has', crew.size > 0);
 }
+
+// Thumbnails: one snapshot per live worker card per second, only while the tab
+// is visible — each one is a headless-Chrome screenshot on the server.
+const thumbCache = new Map();
+function refreshThumbs() {
+  const ids = thumbPlan([...crew.values()], document.visibilityState === 'visible');
+  for (const id of ids) {
+    const img = crewEl.querySelector('.cthumb[data-id="' + id + '"]');
+    if (!img) continue;
+    const src = '/api/workers/' + encodeURIComponent(id) + '/camera/snapshot?t=' + Date.now();
+    img.src = src;
+    thumbCache.set(id, src);
+  }
+  for (const id of [...thumbCache.keys()]) if (ids.indexOf(id) < 0) thumbCache.delete(id);
+}
+setInterval(refreshThumbs, 1000);
 
 function feedCrew(ev) {
   if (ev.kind !== 'worker' && ev.kind !== 'journey') return;
@@ -440,7 +504,7 @@ function feedCrew(ev) {
   const m = /^(.+?) #(\\d+)$/.exec(ev.who || '');
   if (!m) return;
   const prev = crew.get(m[1]);
-  crew.set(m[1], { kind: ev.kind, steps: Number(m[2]), line: ev.text, ts: ev.ts, goal: prev && prev.goal });
+  crew.set(m[1], { kind: ev.kind, steps: Number(m[2]), line: ev.text, ts: ev.ts, goal: prev && prev.goal, id: ev.workerId || (prev && prev.id), state: prev && prev.state });
   renderCrew();
 }
 
@@ -454,16 +518,16 @@ const CREW_MARK = { done: '\u2705 done \u00b7 ', failed: '\u2716 failed \u00b7 '
 function seedCrew(work) {
   if (!work) return;
   const seen = new Set();
-  const seed = (name, kind, steps, line, status, goal) => {
+  const seed = (name, kind, steps, line, status, goal, id) => {
     seen.add(name);
     const terminal = !!CREW_MARK[status];
     const cur = crew.get(name);
     // A status CHANGE always wins, even at the same step count: a worker that
     // just finished reports ON the step it finished, and that report is the
     // whole point of the card (live soak: the finish used to be invisible).
-    if (cur && cur.steps >= steps && !(terminal && !cur.terminal)) { if (goal && !cur.goal) { cur.goal = goal; } return; } // event feed is ahead
+    if (cur && cur.steps >= steps && !(terminal && !cur.terminal)) { if (goal && !cur.goal) { cur.goal = goal; } if (id && !cur.id) { cur.id = id; } return; } // event feed is ahead
     crew.set(name, {
-      kind, steps, terminal, goal: goal || (cur && cur.goal),
+      kind, steps, terminal, goal: goal || (cur && cur.goal), id: id || (cur && cur.id), state: cur && cur.state,
       line: (CREW_MARK[status] || '') + (line || status),
       // A terminal card keeps its FIRST timestamp so the 3-minute sweeper still
       // retires it: /api/state now holds an outcome for 10 minutes, which must
@@ -473,7 +537,7 @@ function seedCrew(work) {
   };
   if (work.journey && (work.journey.status === 'running' || work.journey.status === 'interrupted'))
     seed(work.journey.id, 'journey', work.journey.step, work.journey.last, work.journey.status, work.journey.goal);
-  for (const w of work.workers || []) seed(w.name, 'worker', w.steps, w.reason || w.last || w.task, w.status, w.task);
+  for (const w of work.workers || []) seed(w.name, 'worker', w.steps, w.reason || w.last || w.task, w.status, w.task, w.id);
   for (const [name, c] of [...crew]) {
     // Ledger says this work is over — but let a FRESH card linger: its last
     // line is the terminal report ('done: built the cabin'), worth reading
@@ -551,12 +615,48 @@ function showVeil(v) {
   vtext.textContent = v.text;
 }
 
+// ── the stage: the bot, or one worker (CREW.md tap-to-swap) ──────────────
+let stage = { id: null, name: null };
+let workerRows = new Map(); // id → row from GET /api/workers (polled while a worker is on stage)
+const stageback = document.getElementById('stageback');
+function swapStage(next) {
+  stage = next || { id: null, name: null };
+  const m = stageModel(stage, (lastState && lastState.username) || 'StrandsBot');
+  stopBtn.setAttribute('aria-label', m.stopAria);
+  stageback.classList.toggle('show', m.worker);
+  lastFrames = -1;
+  if (streaming) startStream();
+  renderCrew();
+  pollWorkers();
+}
+stageback.addEventListener('click', (e) => { e.stopPropagation(); swapStage(null); });
+// Runs while a worker is on stage OR a live worker card is showing: the rows
+// carry the state word, the frames counter and — between the SSE 'done' line
+// and the next /api/state seed — the fact that a worker is already dead, so its
+// card stops asking for thumbnails the moment it leaves.
+async function pollWorkers() {
+  if (!stage.id && !thumbPlan([...crew.values()], true).length) return;
+  try {
+    const j = await (await fetch('/api/workers')).json();
+    workerRows = new Map((j.workers || []).map((r) => [r.id, r]));
+    for (const c of crew.values()) {
+      if (!c.id) continue;
+      const row = workerRows.get(c.id);
+      if (!row) continue;
+      c.state = row.state;
+      if (row.state === 'dead') c.terminal = true;
+    }
+    renderCrew();
+  } catch { /* the state poll reports unreachability */ }
+}
+setInterval(pollWorkers, 2000);
+
 function startStream() {
   streaming = true;
   stillPolls = 0;
   imgError = false;
   framesAtStart = null;
-  video.src = '/stream.mjpeg?t=' + Date.now();
+  video.src = stageModel(stage, '').src + '?t=' + Date.now();
   showVeil(veilFor({ noFrameYet: true })); // until the first poll says otherwise
 }
 function stopStream() {
@@ -593,23 +693,31 @@ async function pollState() {
   glyphBar(document.getElementById('food'), s.food ?? 0, '\\uD83C\\uDF57');
   document.getElementById('coords').textContent = s.position
     ? Math.round(s.position.x) + ' ' + Math.round(s.position.y) + ' ' + Math.round(s.position.z) : '';
-  document.getElementById('watchers').textContent =
-    (s.watchers ?? 0) + ' watching \\u00b7 ' + (s.username ?? '') + (botConnected === false ? ' \\u00b7 offline' : '');
   seedCrew(s.work);
+  // On a worker's stage the worker's row stands in for the bot's state: its
+  // frames counter, its camera sentence, its liveness. Gone/dead → back to the bot.
+  let frames = s.frames, camera = s.camera, connected = botConnected, watching = s.watchers ?? 0, label = s.username ?? '';
+  if (stage.id) {
+    const ws = workerStageState(workerRows.get(stage.id));
+    if (ws.gone && workerRows.size) { toast((stage.name || stage.id) + ' is gone \\u2014 back to ' + (s.username || 'the bot')); swapStage(null); }
+    else { frames = ws.frames; camera = ws.camera; connected = ws.connected; label = stageModel(stage, '').label; watching = (workerRows.get(stage.id) || {}).camera && workerRows.get(stage.id).camera.watchers || 0; }
+  }
+  document.getElementById('watchers').textContent =
+    watching + ' watching \\u00b7 ' + label + (connected === false ? ' \\u00b7 offline' : '');
   if (streaming && document.visibilityState === 'visible') {
     let stalled = false;
-    if (framesAtStart === null) framesAtStart = s.frames;
-    const noFrameYet = typeof s.frames === 'number' && s.frames === framesAtStart;
-    if (typeof s.frames === 'number' && s.frames === lastFrames) {
+    if (framesAtStart === null) framesAtStart = frames;
+    const noFrameYet = typeof frames === 'number' && frames === framesAtStart;
+    if (typeof frames === 'number' && frames === lastFrames) {
       // Frozen counter while warming is the warm-up, not a stall — reload only
       // once the camera claims to be streaming and still sends nothing.
-      const warming = (s.camera || '').indexOf('warming') === 0;
+      const warming = (camera || '').indexOf('warming') === 0;
       if (++stillPolls >= 2 && !warming) { stalled = true; startStream(); }
     } else {
       stillPolls = 0;
     }
-    lastFrames = s.frames;
-    showVeil(veilFor({ connected: botConnected, camera: s.camera, stalled, imgError, noFrameYet }));
+    lastFrames = frames;
+    showVeil(veilFor({ connected: connected, camera: camera, stalled, imgError, noFrameYet }));
   }
 }
 
@@ -741,7 +849,7 @@ const stopBtn = document.getElementById('stopBtn');
 stopBtn.addEventListener('click', async (e) => {
   e.stopPropagation(); // the stage tap toggles fullscreen; this is not that tap
   stopBtn.disabled = true; stopBtn.classList.add('busy');
-  try { toast(stopReceipt(await post('/api/stop')), 'ok'); }
+  try { toast(stopReceipt(await post(stageModel(stage, '').stopPath)), 'ok'); }
   catch (err) { toast(stopReceipt({ ok: false, error: err.message })); }
   finally { stopBtn.disabled = false; stopBtn.classList.remove('busy'); }
 });

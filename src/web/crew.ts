@@ -27,7 +27,8 @@ export interface WorkerRow {
   food: number | null;
   since_s: number;
   steps: number;
-  camera: { ok: boolean; why: string };
+  /** `frames`/`watchers` are additive: the dashboard's stall detector reads the counter like it reads /api/state.frames. */
+  camera: { ok: boolean; why: string; frames?: number; watchers?: number };
   /** The ledger's own word for it — kept next to `state` so a card can say "failed" rather than "dead". */
   status: Worker['status'];
   /** last journal line / result, for the card's one-liner */
@@ -90,7 +91,7 @@ const r1 = (n: number) => Math.round(n * 10) / 10;
  */
 export function workerRow(
   w: Worker & { id: string; progressAt?: number },
-  camera: { ok: boolean; why: string },
+  camera: WorkerRow['camera'],
   now = Date.now(),
 ): WorkerRow {
   const bot = w.body?.bot as Partial<Bot> | undefined;
@@ -129,12 +130,15 @@ export function workersHealth(workers: Array<Pick<Worker, 'status'>>, max: numbe
  */
 export function describeWorkerCamera(s: {
   alive: boolean;
+  /** still joining the server — a body on its way, not a body that left */
+  connecting?: boolean;
   frames: number;
   watchers: number;
   error?: string;
   warmingSince?: number;
   now: number;
 }): { ok: boolean; why: string } {
+  if (s.connecting) return { ok: true, why: 'joining the world — camera opens once the body is in' };
   if (!s.alive) return { ok: false, why: 'worker has left the world — no camera' };
   if (s.error) return { ok: false, why: `broken: ${s.error}` };
   if (s.warmingSince) return { ok: true, why: `warming up (${Math.round((s.now - s.warmingSince) / 1000)}s) — viewer page for this worker` };

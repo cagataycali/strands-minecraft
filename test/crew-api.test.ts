@@ -93,6 +93,8 @@ test('workersHealth: alive = connecting + working; max is the advisory knob', ()
 test('describeWorkerCamera: every case in one sentence, near-field honesty included', () => {
   const base = { alive: true, frames: 0, watchers: 0, now: NOW };
   assert.match(crew.describeWorkerCamera({ ...base, alive: false }).why, /left the world/);
+  assert.match(crew.describeWorkerCamera({ ...base, alive: false, connecting: true }).why, /joining the world/, 'mid-connect is not "left"');
+  assert.equal(crew.describeWorkerCamera({ ...base, alive: false, connecting: true }).ok, true);
   assert.equal(crew.describeWorkerCamera({ ...base, alive: false }).ok, false);
   assert.match(crew.describeWorkerCamera({ ...base, error: 'Session closed' }).why, /^broken: Session closed/);
   assert.match(crew.describeWorkerCamera({ ...base, warmingSince: NOW - 4_000 }).why, /warming up \(4s\)/);
