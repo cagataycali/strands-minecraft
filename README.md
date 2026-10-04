@@ -8,7 +8,7 @@
   <img alt="node" src="https://img.shields.io/badge/node-%E2%89%A5%2022-3fb950">
   <img alt="strands" src="https://img.shields.io/badge/Strands%20SDK-%5E1.13-3fb950">
   <img alt="tools" src="https://img.shields.io/badge/tools-61%20%3D%20100%25%20of%20mineflayer-3fb950">
-  <img alt="tests" src="https://img.shields.io/badge/tests-860-3fb950">
+  <img alt="tests" src="https://img.shields.io/badge/tests-862-3fb950">
 </p>
 
 <p align="center">

@@ -114,6 +114,19 @@ export function workerRow(
 }
 
 /**
+ * Which workers `GET /api/workers` lists. The fleet ledger keeps every worker
+ * it ever hired (47-day-old corpses included — the owner saw 18 dead rows next
+ * to 3 live ones on his phone). A card only needs a dead worker long enough to
+ * show its outcome, so: every alive worker, plus the dead for `graceMs`
+ * (default 90 s) after they ended. A dead worker with no `endedAt` is a ghost
+ * from a previous process → never listed.
+ */
+export const DEAD_WORKER_GRACE_MS = 90_000;
+export function listedWorkers<W extends Pick<Worker, 'status' | 'endedAt'>>(workers: W[], now = Date.now(), graceMs = DEAD_WORKER_GRACE_MS): W[] {
+  return workers.filter((w) => isAlive(w.status) || (typeof w.endedAt === 'number' && now - w.endedAt <= graceMs));
+}
+
+/**
  * `/api/health.workers` — how many bodies the crew holds and how many it may.
  * There is no hard headcount cap in the fleet (every worker is its own
  * connection and model budget); `max` is the advisory FLEET_MAX_WORKERS the

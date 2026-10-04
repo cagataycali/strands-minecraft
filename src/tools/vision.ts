@@ -116,7 +116,19 @@ export const FLAT_FRAME_BYTES = 6_000;
 
 /** Tear the camera down completely — browser, page, viewer server — so the
  *  next ensureViewer() builds a fresh one on the CURRENT body. */
-export async function resetCamera(bot: Bot): Promise<void> {
+export async function resetCamera(bot: Bot, opts: { scope?: 'main' | 'all' } = {}): Promise<void> {
+  const browserAlive = !!state.browser && !browserGone();
+  if (opts.scope === 'main' && browserAlive) {
+    // A stale MAIN scene: rebuild only the bot's own viewer + page. The worker
+    // pages share the browser and are fine — tearing the browser down here is
+    // what froze every sub-bot stream on the owner's phone (2026-10-04).
+    try { await state.page?.close(); } catch { /* already gone */ }
+    try { (bot as unknown as { viewer?: { close(): void } }).viewer?.close(); } catch { /* not started */ }
+    state.page = null;
+    state.started = false;
+    state.needsReload = false;
+    return;
+  }
   // Worker pages live in the SAME browser: closing it kills them all, so
   // their bookkeeping must say so or the next request would screenshot ghosts.
   for (const id of [...workerCams.keys()]) await closeWorkerCamera(id);
@@ -126,6 +138,32 @@ export async function resetCamera(bot: Bot): Promise<void> {
   state.page = null;
   state.started = false;
   state.needsReload = false;
+}
+
+/**
+ * Is the main scene STALE? The honest signal is not "small frames" (a bot
+ * mining in the dark produces 4 KB frames all night — the first detector
+ * rebuilt Nova's camera twice for that and froze its workers' streams). A scene
+ * that lost its world is one whose picture does not change while the BODY
+ * does: frames byte-identical for ≥ `need` in a row AND the bot moved ≥ `minMoveBlocks`
+ * over that run. Standing still in a cave never trips it.
+ */
+export interface StaleScene { identical: number; runStart: { x: number; y: number; z: number } | null; lastSig: string | null }
+export function sceneSignature(jpg: Uint8Array): string {
+  // length + a sparse sample of bytes: identical scenes re-encode identically
+  const n = jpg.length; let h = n >>> 0;
+  for (let i = 0; i < n; i += Math.max(1, Math.floor(n / 64))) h = ((h * 31) + jpg[i]) >>> 0;
+  return `${n}:${h.toString(16)}`;
+}
+export function observeScene(s: StaleScene, jpg: Uint8Array, pos: { x: number; y: number; z: number } | null): StaleScene {
+  const sig = sceneSignature(jpg);
+  if (sig === s.lastSig) return { identical: s.identical + 1, runStart: s.runStart ?? pos, lastSig: sig };
+  return { identical: 0, runStart: pos, lastSig: sig };
+}
+export function sceneIsStale(s: StaleScene, pos: { x: number; y: number; z: number } | null, need = 90, minMoveBlocks = 3): boolean {
+  if (s.identical < need || !s.runStart || !pos) return false;
+  const d = Math.hypot(pos.x - s.runStart.x, pos.y - s.runStart.y, pos.z - s.runStart.z);
+  return d >= minMoveBlocks;
 }
 
 // ── 👷 worker cameras: one viewer per worker, one PAGE each, ONE Chrome ──────

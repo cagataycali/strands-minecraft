@@ -25,8 +25,8 @@ import { tmpdir } from 'node:os';
 import type { Duplex } from 'node:stream';
 import { WebSocketServer, type WebSocket } from 'ws';
 import type { Bot } from 'mineflayer';
-import { getCameraPage, resetCamera, isCameraSessionError, shouldRebuildCamera, FLAT_FRAME_BYTES, getWorkerCameraPage, closeWorkerCamera, workerCameraCount, workerViewerPorts, workerCameraPort } from './tools/vision.js';
-import { matchWorkerRoute, workerRow, workersHealth, describeWorkerCamera, allocateViewerPort, hireRequest, headerSafe, type WorkerRow } from './web/crew.js';
+import { getCameraPage, resetCamera, isCameraSessionError, shouldRebuildCamera, observeScene, sceneIsStale, type StaleScene, getWorkerCameraPage, closeWorkerCamera, workerCameraCount, workerViewerPorts, workerCameraPort } from './tools/vision.js';
+import { matchWorkerRoute, workerRow, workersHealth, listedWorkers, describeWorkerCamera, allocateViewerPort, hireRequest, headerSafe, type WorkerRow } from './web/crew.js';
 import type { Worker } from './fleet.js';
 import * as auth from './web/auth.js';
 import { stopBody } from './web/stop.js';
@@ -550,15 +550,16 @@ export function startWeb(
   // a scene that lost its world after a body reconnect (solid sky, 4 KB frames,
   // X-Camera: live). Both now rebuild the viewer on the live body.
   let flatFrames = 0;
+  let scene: StaleScene = { identical: 0, runStart: null, lastSig: null };
   let lastCameraRebuild = 0;
-  const rebuildCamera = async (why: string) => {
+  const rebuildCamera = async (why: string, scope: 'main' | 'all' = 'all') => {
     lastCameraRebuild = Date.now();
     flatFrames = 0;
     lastFrame = undefined;
     cameraError = undefined;
     cameraWarmingSince = undefined;
-    sys(`camera rebuilt: ${why}`);
-    await resetCamera(bot);
+    sys(`camera rebuilt (${scope}): ${why}`);
+    await resetCamera(bot, { scope });
   };
   let cameraWarmingSince: number | undefined;
 
@@ -611,9 +612,12 @@ export function startWeb(
           lastFrame = { jpg, at: Date.now() };
           pushFrame(jpg);
           framesSent++;
-          flatFrames = jpg.length < FLAT_FRAME_BYTES && !!bot.entity ? flatFrames + 1 : 0;
-          if (shouldRebuildCamera({ flatFrames, lastRebuildAt: lastCameraRebuild, now: Date.now() })) {
-            await rebuildCamera(`${flatFrames} flat frames in a row (${jpg.length} B) while the body is in the world — the scene had lost its world`);
+          const pos = bot.entity?.position ? { x: bot.entity.position.x, y: bot.entity.position.y, z: bot.entity.position.z } : null;
+          scene = observeScene(scene, jpg, pos);
+          flatFrames = scene.identical;
+          if (sceneIsStale(scene, pos) && shouldRebuildCamera({ flatFrames, lastRebuildAt: lastCameraRebuild, now: Date.now() })) {
+            await rebuildCamera(`${scene.identical} identical frames while the body moved — the scene had lost its world`, 'main');
+            scene = { identical: 0, runStart: null, lastSig: null };
             break; // the watchers are still attached; the loop below restarts the warm-up for them
           }
           await new Promise((r) => setTimeout(r, Math.max(50, FRAME_MS - (Date.now() - t0))));
@@ -967,7 +971,7 @@ export function startWeb(
         if (!crew) return json(res, 503, { ok: false, error: 'this rail has no fleet' });
         const now = Date.now();
         if (wr.kind === 'list') {
-          return json(res, 200, { ok: true, bot: bot.username ?? botCreateOptions().username, workers: crew.list().map((w) => rowOf(w, now)) });
+          return json(res, 200, { ok: true, bot: bot.username ?? botCreateOptions().username, workers: listedWorkers(crew.list(), now).map((w) => rowOf(w, now)) });
         }
         if (wr.kind === 'hire') {
           const body = hireRequest(await readBody(req).catch(() => ({})));
