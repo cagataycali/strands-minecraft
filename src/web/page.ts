@@ -10,6 +10,7 @@
  *    scrolls under it; the composer sticks to the bottom above the keyboard.
  */
 import { veilFor } from './veil.js';
+import { stopReceipt } from './hud.js';
 
 export const PAGE_HTML = /* html */ `<!doctype html>
 <html lang="en">
@@ -47,7 +48,16 @@ export const PAGE_HTML = /* html */ `<!doctype html>
   .bar .off { color:rgba(255,255,255,.25); }
   #food span { font-size:11px; }
   #food .off { filter:grayscale(1); opacity:.3; }
-  #hudright { margin-left:auto; text-align:right; color:#aeb8c2; }
+  #hudright { margin-left:auto; text-align:right; color:#aeb8c2; white-space:nowrap; }
+  /* The one control on the stage. Reflex-level: POST /api/stop halts the
+     pathfinder, controls, digging and the journey without buying a model turn.
+     Red first, like the tiny body card; big enough for a thumb (44px). */
+  #stopBtn { pointer-events:auto; flex:none; min-width:64px; height:44px; padding:0 14px;
+             border-radius:12px; background:#b62324; color:#fff; font-weight:800; font-size:14px;
+             letter-spacing:1px; border:1px solid #ff7b72; box-shadow:0 2px 10px rgba(0,0,0,.6);
+             text-shadow:none; margin-bottom:2px; }
+  #stopBtn:active, #stopBtn.busy { background:#e5534b; }
+  #stopBtn:disabled { opacity:.6; }
   #vstall { position:absolute; inset:0; display:none; align-items:center; justify-content:center;
             background:rgba(11,14,20,.55); color:#aeb8c2; font-size:13px; letter-spacing:.3px;
             backdrop-filter:blur(2px); -webkit-backdrop-filter:blur(2px); }
@@ -134,6 +144,7 @@ export const PAGE_HTML = /* html */ `<!doctype html>
            border:1px solid #6e2c31; border-radius:10px; padding:8px 14px; font-size:13px;
            max-width:86%; opacity:0; pointer-events:none; transition:opacity .2s, transform .2s; z-index:60; }
   #toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
+  #toast.ok { background:#12261a; color:#7ee787; border-color:#1f6b3a; }
   /* Above everything incl. the stage (#stage is positioned and later in the
      DOM, so without a z-index the black video box painted OVER the gate on
      any viewport wide enough for the 16:9 stage to reach the centre). */
@@ -182,6 +193,7 @@ export const PAGE_HTML = /* html */ `<!doctype html>
       <div id="coords"></div>
       <div id="watchers"></div>
     </div>
+    <button id="stopBtn" type="button" aria-label="Stop the bot: halt movement, digging and the journey" title="Stop — reflex, no model turn">STOP</button>
   </div>
 </div>
 <div id="side">
@@ -247,6 +259,7 @@ async function login(pre) {
 }
 
 ${veilFor.toString()}
+${stopReceipt.toString()}
 
 const feed = document.getElementById('feed');
 const jump = document.getElementById('jump');
@@ -556,9 +569,10 @@ document.getElementById('stage').addEventListener('click', () => {
 });
 
 let toastTimer;
-function toast(text) {
+function toast(text, tone) {
   const t = document.getElementById('toast');
   t.textContent = text;
+  t.classList.toggle('ok', tone === 'ok');
   t.classList.add('show');
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => t.classList.remove('show'), 3500);
@@ -580,7 +594,19 @@ async function send(text) {
   }
 }
 
-const CHIPS = ['status?', 'come to me', 'what are you doing?', 'look around', 'stop'];
+const CHIPS = ['status?', 'come to me', 'what are you doing?', 'look around', 'follow me'];
+
+// 🛑 the reflex stop. A chip saying "stop" was a MODEL turn — seconds of
+// thinking while the body kept walking off the cliff. This is the body-level
+// halt (web.ts stopBody + the journey), answered in milliseconds.
+const stopBtn = document.getElementById('stopBtn');
+stopBtn.addEventListener('click', async (e) => {
+  e.stopPropagation(); // the stage tap toggles fullscreen; this is not that tap
+  stopBtn.disabled = true; stopBtn.classList.add('busy');
+  try { toast(stopReceipt(await post('/api/stop')), 'ok'); }
+  catch (err) { toast(stopReceipt({ ok: false, error: err.message })); }
+  finally { stopBtn.disabled = false; stopBtn.classList.remove('busy'); }
+});
 const chipsEl = document.getElementById('chips');
 for (const c of CHIPS) {
   const b = document.createElement('button');
