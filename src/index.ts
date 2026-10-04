@@ -1,5 +1,6 @@
 import 'dotenv/config';
 import { PeerChat, peerOptionsFromEnv, peerMode } from './peerchat.js';
+import { withTurnScope, chatDisposition } from './silence.js';
 import readline from 'node:readline';
 import { createLiveBody } from './body.js';
 import { botCreateOptions } from './bot.js';
@@ -225,14 +226,17 @@ const main = async () => {
     const note = takeNotesAudited(); // stale sightings die at the door
     web?.log('in', opts.chat ? 'player' : 'you', text, opts.replyTo); // its own say id, so the answer can name it
     try {
-      const answer = await session.ask(note ? `${note}\n\n${text}` : text);
-      console.log(`🤖 ${answer}`);
+      const { result: answer, silent, reason } = await withTurnScope(() => session.ask(note ? `${note}\n\n${text}` : text));
+      const d = chatDisposition(answer, silent);
+      console.log(reason ? `${d.log} — ${reason}` : d.log);
       // Tagged with the ask it answers (issue #25) — an untagged 'out' is
       // self-driven narration and must never read as a reply to a human.
-      web?.log('out', bot.username ?? 'bot', answer, opts.replyTo);
-      if (opts.chat && answer) sayInChat(answer);
-      if ((opts.voice || VOICE_REPLIES) && answer) await speak(answer);
-      return { answer };
+      // A silent turn still lands in the dashboard feed, marked, so the
+      // owner can see what the bot chose not to say.
+      web?.log('out', bot.username ?? 'bot', silent ? `🤫 ${answer}` : answer, opts.replyTo);
+      if (opts.chat && d.say) sayInChat(answer);
+      if ((opts.voice || VOICE_REPLIES) && d.say) await speak(answer);
+      return { answer, silent };
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       console.error(`❌ ${msg}`);

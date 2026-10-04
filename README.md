@@ -7,8 +7,8 @@
   <img alt="MIT" src="https://img.shields.io/badge/license-MIT-3fb950">
   <img alt="node" src="https://img.shields.io/badge/node-%E2%89%A5%2022-3fb950">
   <img alt="strands" src="https://img.shields.io/badge/Strands%20SDK-%5E1.13-3fb950">
-  <img alt="tools" src="https://img.shields.io/badge/tools-60%20%3D%20100%25%20of%20mineflayer-3fb950">
-  <img alt="tests" src="https://img.shields.io/badge/tests-856-3fb950">
+  <img alt="tools" src="https://img.shields.io/badge/tools-61%20%3D%20100%25%20of%20mineflayer-3fb950">
+  <img alt="tests" src="https://img.shields.io/badge/tests-860-3fb950">
 </p>
 
 <p align="center">
@@ -16,7 +16,7 @@
   <a href="#install-in-60-seconds">Install</a> ·
   <a href="#ten-minutes-with-it">Ten minutes</a> ·
   <a href="#it-stays-alive-without-the-model">Alive</a> ·
-  <a href="#the-tools--60-covering-100-of-mineflayer">Tools</a> ·
+  <a href="#the-tools--61-covering-100-of-mineflayer">Tools</a> ·
   <a href="#talk-to-it--seven-rails-one-history">Talk to it</a> ·
   <a href="#grow-it--a-crew-a-second-bot-the-knobs">Grow it</a> ·
   <a href="#understand-it--the-map-and-the-findings">Understand it</a> ·
@@ -144,7 +144,7 @@ you> what does the hill look like now?
 🤖 Flat to y=64, grass line intact, Chopper's still on the east lip. Two more passes.
 ```
 
-Every tool and parameter above exists ([the table](#the-tools--60-covering-100-of-mineflayer)); the
+Every tool and parameter above exists ([the table](#the-tools--61-covering-100-of-mineflayer)); the
 `[Δ …]` tail is measured from the body, not from the model's account of itself.
 
 ```mermaid
@@ -154,7 +154,7 @@ flowchart TB
     chat["game chat"] --- cli["CLI you>"] --- ptt["push-to-talk"] --- call["realtime call"] --- web["dashboard"] --- phone["phone call"] --- tiny["tiny endpoint"]
   end
   rails --> S["Session — fork / fold"]
-  S --> A["Strands Agent · 60 tools"]
+  S --> A["Strands Agent · 61 tools"]
   A --> B["body proxy — reconnects, re-wires; every tool keeps working"]
   B --> MC[("Minecraft server")]
   MC -. events .-> R["reflexes 300 ms · sentinel · digest — zero tokens"]
@@ -186,7 +186,7 @@ stay a log line; a stranger digging near a waypoint gets **one** note per base w
 (`— 14 blocks so far`), then silence until one escalation (`SECURITY_SETTLE_MS`,
 `SECURITY_QUIET_MS`).
 
-## The tools — 60, covering 100% of mineflayer
+## The tools — 61, covering 100% of mineflayer
 
 [COVERAGE.md](COVERAGE.md) maps every mineflayer capability to a tool or an explicit N/A. The matrix
 is the contract: **if mineflayer can do it, the agent can.**
@@ -200,7 +200,7 @@ is the contract: **if mineflayer can do it, the agent can.**
 | ⚔️ Combat | attack_entity `until:'dead'` — cooldown-honest, shield between swings, retreat below minHealth |
 | 📦 Interaction | container_transact · furnace_transact (fuel %/progress %) · trade_with_villager · sleep_in_bed · wake_up · fish · enchant_item · anvil_use · activate_entity · respawn |
 | 🧠 Memory | remember_place · recall_places · forget_place — waypoints that survive restarts, shared with workers |
-| 🧭 Meta | start_journey · journey_status · stop_journey · manage_bots · capture_view · say_in_chat · whisper · voice_say · voice_config |
+| 🧭 Meta | start_journey · journey_status · stop_journey · manage_bots · capture_view · say_in_chat · stay_silent · whisper · voice_say · voice_config |
 
 Design rules everywhere: tools **walk into range first**; errors **teach** (unknown block → close
 matches, so the agent self-corrects); windows always close in `finally`; no persistent listeners
@@ -391,8 +391,8 @@ mechanism and what the tests now pin:
 - [COVERAGE.md](COVERAGE.md) — the mineflayer → tool matrix · [AGENTS.md](AGENTS.md) — the developer
   map.
 
-Layout: `src/index.ts` is the spine (rails, reflexes, CLI — read it first); `src/tools/` the 60
-tools by domain; `test/` 87 node:test files on a fake world + fake bot. File by file:
+Layout: `src/index.ts` is the spine (rails, reflexes, CLI — read it first); `src/tools/` the 61
+tools by domain; `test/` 88 node:test files on a fake world + fake bot. File by file:
 [AGENTS.md → Layout](AGENTS.md#layout).
 
 **Roadmap.** Done: 100% mineflayer coverage · fleet · blueprints · persistent memory · vision ·
@@ -408,7 +408,7 @@ README.
 
 | | strands-minecraft | [Mindcraft](https://github.com/kolbytn/mindcraft) | [Voyager](https://github.com/MineDojo/Voyager) | [mineflayer](https://github.com/PrismarineJS/mineflayer) alone |
 |---|---|---|---|---|
-| the model drives | 60 typed tools = 100% of mineflayer | chat actions; optionally "write/execute code on your computer" (off by default) | "an ever-growing skill library of executable code" | your JavaScript/Python |
+| the model drives | 61 typed tools = 100% of mineflayer | chat actions; optionally "write/execute code on your computer" (off by default) | "an ever-growing skill library of executable code" | your JavaScript/Python |
 | models | Bedrock default; OpenAI, Anthropic via one env var | 18 APIs incl. openai · google · anthropic · ollama (local) | "OpenAI's GPT-4" | none |
 | when the model is asleep | 300 ms reflexes + sentinel, zero tokens | — | — | everything is your code |
 | more than one body | `manage_bots` hires workers; independent compose projects | `--profiles andy.json jill.json` | a single agent | as many as you write |

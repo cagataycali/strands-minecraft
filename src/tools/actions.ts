@@ -1,4 +1,5 @@
 import { tool } from '@strands-agents/sdk';
+import { markSilent } from '../silence.js';
 import { z } from 'zod';
 import type { Bot } from 'mineflayer';
 import { resolveEntity, inventoryItem, vec, fmtPos, approach, approachEntity, bestMeleeWeapon, waitFor, bagCounts, bagDelta } from './helpers.js';
@@ -612,5 +613,18 @@ export function chatTools(bot: Bot) {
     },
   });
 
-  return [say, whisper];
+  const silent = tool({
+    name: 'stay_silent',
+    description:
+      'Choose NOT to speak this turn. Whatever you write afterwards is logged to the dashboard only and never sent to game chat. Use it when a message (especially from another bot) needs no reply, when you would only be acknowledging, or when the exchange is winding down. Saying "nothing to add" in chat is not silence — this tool is.',
+    inputSchema: z.object({ reason: z.string().max(120).optional().describe('one short private note on why (dashboard only)') }),
+    callback: ({ reason }) => {
+      const ok = markSilent(reason);
+      return ok
+        ? 'Silent: nothing you write this turn reaches game chat (dashboard log only). End your turn now, briefly.'
+        : 'No chat turn is open right now — nothing to silence.';
+    },
+  });
+
+  return [say, whisper, silent];
 }

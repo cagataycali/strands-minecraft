@@ -3,7 +3,7 @@
 Guide for AI coding agents working in **strands-minecraft** — a Minecraft bot
 where every bot *is* a [Strands](https://github.com/strands-agents) agent and
 the full mineflayer surface is exposed as tools. ~18k lines of TypeScript,
-87 test files, runs through `tsx` (no build step to run).
+88 test files, runs through `tsx` (no build step to run).
 
 Human docs live in `README.md` (features + how to play). This file is the
 map for *changing the code*.
@@ -77,7 +77,7 @@ first; it is the spine.
 | Body | `body.ts` | mineflayer connection as a **proxy** that survives signed-chat kicks (mineflayer#3838); tools built once keep working across reconnects. `onRevive` / `onGaveUp`. |
 | Agent | `agent.ts` | builds the Strands `Agent` + `forkFactory`; mounts all tools. Takes a `model` from `model.ts` (`STRANDS_MODEL_PROVIDER` bedrock · openai · anthropic — resolved ONCE in `main()`, shared with every worker). |
 | Session | `session.ts` | shared history, fork/fold, sliding-window trim, throttle retry, history audit for split toolUse/toolResult pairs. |
-| Tools | `tools/*.ts` | 60 tools = 100% of mineflayer (count generated into docs/numbers.json, pinned by test/readme-numbers.test.ts). `tools/index.ts` `allTools(bot)`. Split by domain: movement, world, inventory, perception, vision, memory, actions, blueprints, craft-verify. |
+| Tools | `tools/*.ts` | 61 tools = 100% of mineflayer (count generated into docs/numbers.json, pinned by test/readme-numbers.test.ts). `tools/index.ts` `allTools(bot)`. Split by domain: movement, world, inventory, perception, vision, memory, actions, blueprints, craft-verify. |
 | Journeys | `journeys.ts` | long goals ("mine until 64 iron") — a loop of model turns with `[JOURNEY_DONE]`/`[WAITING:]` sentinels. |
 | Fleet | `fleet.ts` | `manage_bots` — the bot hires its own worker bots (own body + agent), supervised/dismissed by the boss. |
 | Thinker | `thinker.ts` | idle reflection every 90s. |
@@ -155,7 +155,7 @@ src/
 ├── config.ts       every tunable, one registry, env override + why
 ├── voice*.ts, realtime/   push-to-talk, realtime call, voice bridge
 ├── web.ts, web/    dashboard (MJPEG/SSE/say), passkey auth, tiny endpoint
-└── tools/          60 game tools by domain
+└── tools/          61 game tools by domain
 test/               74 node:test files (fake world + fake bot)
 docs/               landing page + numbers.json + findings/
 ```
