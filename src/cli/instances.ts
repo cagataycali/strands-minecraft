@@ -221,6 +221,14 @@ async function waitHealthy(port: number, ms: number, name: string): Promise<bool
   return false;
 }
 
+/** SIGTERM, 3 s grace, then SIGKILL. Returns which signal did it. */
+async function stopPid(pid: number): Promise<'SIGTERM' | 'SIGKILL' | 'gone'> {
+  try { process.kill(pid, 'SIGTERM'); } catch { return 'gone'; }
+  for (let i = 0; i < 30; i++) { await new Promise((r) => setTimeout(r, 100)); try { process.kill(pid, 0); } catch { return 'SIGTERM'; } }
+  try { process.kill(pid, 'SIGKILL'); } catch { /* gone */ }
+  return 'SIGKILL';
+}
+
 async function rm(a: AddArgs & { name: string }): Promise<number> {
   const instances = readInstances();
   const inst = instances.find((i) => i.name.toLowerCase() === a.name.toLowerCase());
@@ -228,16 +236,16 @@ async function rm(a: AddArgs & { name: string }): Promise<number> {
   if (inst.envPath === '.env') { console.error(`✗ ${inst.name} is the main bot (.env) — rm manages instances/*.env only`); return 2; }
   const ports = listeners();
   const pid = ports.get(inst.webPort);
+  // The pid file holds the tsx launcher (parent of the port owner); take both down.
+  const pidFile = join(cwd, 'instances', `${inst.name}.pid`);
+  const launcher = existsSync(pidFile) ? Number(readFileSync(pidFile, 'utf8').trim()) : NaN;
   if (a.dryRun) { say(`would stop pid ${pid ?? '—'}, delete ${inst.envPath}${inst.publicUrl ? `, drop the ${hostOf(inst.publicUrl)} ingress` : ''}, rewrite PEER_BOTS${a.purge ? `, rm -rf ${inst.memoryDir}` : ''}`); return 0; }
   if (pid) {
-    try { process.kill(pid, 'SIGTERM'); } catch { /* gone */ }
-    let alive = true;
-    for (let i = 0; i < 30 && alive; i++) { await new Promise((r) => setTimeout(r, 100)); try { process.kill(pid, 0); } catch { alive = false; } }
-    if (alive) { try { process.kill(pid, 'SIGKILL'); } catch { /* gone */ } say(`✓ stop   pid ${pid} (SIGKILL — the bot ignores SIGTERM while the REPL owns stdin)`); }
-    else say(`✓ stop   pid ${pid}`);
+    const r = await stopPid(pid);
+    say(`✓ stop   pid ${pid}${r === 'SIGKILL' ? ' (SIGKILL — the bot ignores SIGTERM)' : ''}`);
   } else say(`-  stop   ${inst.name} was not running`);
+  if (Number.isFinite(launcher) && launcher !== pid) { try { process.kill(launcher, 'SIGKILL'); } catch { /* already gone */ } }
   unlinkSync(join(cwd, inst.envPath));
-  const pidFile = join(cwd, 'instances', `${inst.name}.pid`);
   if (existsSync(pidFile)) unlinkSync(pidFile);
   say(`✓ rm     ${inst.envPath}`);
   const rest = instances.filter((i) => i !== inst);
@@ -267,7 +275,7 @@ async function rm(a: AddArgs & { name: string }): Promise<number> {
   }
   if (a.purge && inst.memoryDir) { rmSync(inst.memoryDir, { recursive: true, force: true }); say(`✓ purge  ${inst.memoryDir}`); }
   else if (inst.memoryDir) say(`keep   ${inst.memoryDir} (waypoints, passkeys, token) — --purge deletes it`);
-  if (inst.hasToken) say(`next   tiny › Devices › ${rowName(inst.name)} › Forget — the row keeps probing ${inst.publicUrl || 'its url'} until you do (or: npx tiny-tech devices forget ${rowName(inst.name)})`);
+  if (inst.hasToken) say(`next   tiny › Devices › ${rowName(inst.name)} › Forget (apps or https://tiny.technology/devices) — the row keeps probing ${inst.publicUrl || 'its url'} until you do`);
   return 0;
 }
 

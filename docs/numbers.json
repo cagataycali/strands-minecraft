@@ -1,6 +1,6 @@
 {
   "generated_by": "scripts/site-numbers.mjs",
-  "commit": "ca65672",
+  "commit": "08a9e52",
   "version": "0.1.0",
   "node": ">=22",
   "license": "MIT",
@@ -200,7 +200,7 @@
     "attack_entity": "src/tools/actions.ts:11",
     "build_blueprint": "src/tools/world.ts:200",
     "build_structure": "src/tools/world.ts:299",
-    "capture_view": "src/tools/vision.ts:165",
+    "capture_view": "src/tools/vision.ts:220",
     "check_darkness": "src/tools/perception.ts:241",
     "collect_ground_items": "src/tools/world.ts:58",
     "container_transact": "src/tools/actions.ts:171",
@@ -255,10 +255,10 @@
     "write_book": "src/tools/inventory.ts:363",
     "write_sign": "src/tools/world.ts:358"
   },
-  "testFiles": 74,
-  "testCases": 785,
-  "loc": 18608,
-  "srcFiles": 44,
+  "testFiles": 84,
+  "testCases": 833,
+  "loc": 19719,
+  "srcFiles": 48,
   "rails": 7,
   "routes": [
     {

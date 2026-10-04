@@ -8,7 +8,7 @@
   <img alt="node" src="https://img.shields.io/badge/node-%E2%89%A5%2022-3fb950">
   <img alt="strands" src="https://img.shields.io/badge/Strands%20SDK-%5E1.13-3fb950">
   <img alt="tools" src="https://img.shields.io/badge/tools-60%20%3D%20100%25%20of%20mineflayer-3fb950">
-  <img alt="tests" src="https://img.shields.io/badge/tests-785-3fb950">
+  <img alt="tests" src="https://img.shields.io/badge/tests-833-3fb950">
 </p>
 
 <p align="center">
@@ -304,6 +304,24 @@ caller needs the token.
 
 ## Grow it — a crew, a second bot, the knobs
 
+### One command adds a bot
+
+```bash
+npx strands-minecraft add Ivy --public https://ivy.example.com --tunnel minecraft --enroll
+npx strands-minecraft ls          # ports, pid, in world?, public url, enrolled?   ·   rm Ivy [--purge]
+```
+
+`add` is the whole second-bot checklist, from the same checkout: the first free `WEB_PORT`/`VIEWER_PORT`
+family ≥ `--ports` (default `3208/3207`) → `instances/<Name>.env` (gitignored, `0600`: username, ports,
+`MEMORY_DIR ~/.strands-minecraft-<name>`, own passkey store, fresh 64-hex `TINY_TOKEN`, `PEER_BOTS`,
+`MINECRAFT_PUBLIC_URL`; everything else inherits `.env`, `--server host:port` overrides the world) →
+**`PEER_BOTS` rewritten on every instance** so no two bots ever answer each other (running ones keep the
+old list until *you* restart them — `add` says which) → `--tunnel`: ingress rule before the
+`http_status:404` catch-all in `~/.cloudflared/<name>.yml`, `route dns`, LaunchAgent kickstart → detached
+start (`logs/<Name>.log`, waits ≤60 s for `mc.connected`; `--no-start` / `start <Name>`) → `--enroll`:
+`tiny-tech enroll --body strands-the-miner --name <name>` so it is a device with its own camera card.
+`--dry-run` prints the plan with the token redacted. In Docker an instance is a compose project (below).
+
 ### Run a second bot (and a third…)
 
 Pick by who should be in charge. **A crew serving one agenda** needs zero setup: `manage_bots` is a
@@ -374,7 +392,7 @@ mechanism and what the tests now pin:
   map.
 
 Layout: `src/index.ts` is the spine (rails, reflexes, CLI — read it first); `src/tools/` the 60
-tools by domain; `test/` 74 node:test files on a fake world + fake bot. File by file:
+tools by domain; `test/` 84 node:test files on a fake world + fake bot. File by file:
 [AGENTS.md → Layout](AGENTS.md#layout).
 
 **Roadmap.** Done: 100% mineflayer coverage · fleet · blueprints · persistent memory · vision ·
