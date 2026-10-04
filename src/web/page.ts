@@ -130,7 +130,10 @@ export const PAGE_HTML = /* html */ `<!doctype html>
            border:1px solid #6e2c31; border-radius:10px; padding:8px 14px; font-size:13px;
            max-width:86%; opacity:0; pointer-events:none; transition:opacity .2s, transform .2s; z-index:60; }
   #toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
-  #gate { position:fixed; inset:0; background:#0b0e14; display:flex; flex-direction:column;
+  /* Above everything incl. the stage (#stage is positioned and later in the
+     DOM, so without a z-index the black video box painted OVER the gate on
+     any viewport wide enough for the 16:9 stage to reach the centre). */
+  #gate { position:fixed; inset:0; z-index:100; background:#0b0e14; display:flex; flex-direction:column;
           align-items:center; justify-content:center; gap:14px; padding:24px; text-align:center; }
   #gate.hidden { display:none; }
   #gate p { color:#8b98a5; max-width:320px; }
@@ -143,7 +146,7 @@ export const PAGE_HTML = /* html */ `<!doctype html>
   <button id="gateBtn" style="display:none"></button>
 </div>
 <div id="stage">
-  <img id="video" alt="bot view">
+  <img id="video" alt="">
   <div id="vstall"><span><span class="spin"></span>reconnecting…</span></div>
   <div id="hud">
     <span id="dot"></span>
