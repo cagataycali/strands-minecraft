@@ -55,7 +55,62 @@ export async function nicenChrome(
   }
 }
 
+/** Did the headless browser die under us? puppeteer's Page object does NOT flip
+ *  isClosed() when Chrome is killed from outside (measured 2026-10-04: a
+ *  kill -9 on the renice'd pid left page.isClosed() === false and every
+ *  screenshot throwing "Protocol error (Page.captureScreenshot): Session
+ *  closed" — forever, until the bot restarted). The browser's connection flag
+ *  is the honest one. */
+function browserGone(): boolean {
+  const b = state.browser as unknown as { connected?: boolean; isConnected?: () => boolean } | null;
+  if (!b) return false;
+  if (typeof b.connected === 'boolean') return !b.connected;
+  if (typeof b.isConnected === 'function') return !b.isConnected();
+  return false;
+}
+
+/** Errors that mean the page/browser is dead, not that one shot failed. A
+ *  caller that sees one should resetCamera() and warm up again, not keep
+ *  reporting the same `broken:` line until the process restarts. */
+export function isCameraSessionError(message: string): boolean {
+  return /Session closed|Target closed|Target\.detachFromTarget|detached|Navigating frame was detached|Connection closed|Browser has disconnected|Protocol error/i.test(message);
+}
+
+/** Should the stream rebuild the camera because the picture is flat? A live
+ *  first-person frame is 20–60 KB at quality 60; a scene that lost its world
+ *  (the viewer bound to a body that was replaced on reconnect) is a solid sky
+ *  — a ~4 KB JPEG — for as long as nobody rebuilds it. Thresholds: ≥ `need`
+ *  consecutive flat frames (≈30 s at 3 fps) and at most one rebuild per minute
+ *  so a genuinely empty view (bot staring at the sky) cannot thrash Chrome. */
+export function shouldRebuildCamera(
+  s: { flatFrames: number; lastRebuildAt: number; now: number },
+  need = 90,
+  minGapMs = 60_000,
+): boolean {
+  return s.flatFrames >= need && s.now - s.lastRebuildAt >= minGapMs;
+}
+
+/** A frame is "flat" when the JPEG is implausibly small for a rendered world. */
+export const FLAT_FRAME_BYTES = 6_000;
+
+/** Tear the camera down completely — browser, page, viewer server — so the
+ *  next ensureViewer() builds a fresh one on the CURRENT body. */
+export async function resetCamera(bot: Bot): Promise<void> {
+  try { await state.browser?.close(); } catch { /* already gone */ }
+  try { (bot as unknown as { viewer?: { close(): void } }).viewer?.close(); } catch { /* not started */ }
+  state.browser = null;
+  state.page = null;
+  state.started = false;
+  state.needsReload = false;
+}
+
 async function ensureViewer(bot: Bot): Promise<import('puppeteer-core').Page> {
+  if (browserGone()) {
+    // Chrome died (killed, crashed, OOM): the page handle is a ghost. Drop both
+    // and fall through to a full warm-up instead of screenshotting a corpse.
+    state.browser = null;
+    state.page = null;
+  }
   if (!state.started) {
     mineflayerViewer(bot, { port: VIEWER_PORT, firstPerson: true, viewDistance: 4 });
     state.started = true;

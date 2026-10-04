@@ -25,7 +25,7 @@ import { tmpdir } from 'node:os';
 import type { Duplex } from 'node:stream';
 import { WebSocketServer, type WebSocket } from 'ws';
 import type { Bot } from 'mineflayer';
-import { getCameraPage } from './tools/vision.js';
+import { getCameraPage, resetCamera, isCameraSessionError, shouldRebuildCamera, FLAT_FRAME_BYTES } from './tools/vision.js';
 import * as auth from './web/auth.js';
 import { WARMING_JPEG, WARMING_PULSE_MS, mjpegPart } from './web/warming-frame.js';
 import { PAGE_HTML } from './web/page.js';
@@ -514,6 +514,21 @@ export function startWeb(
 
   // Camera health, surfaced on /api/state: a black <img> must be explainable.
   let cameraError: string | undefined;
+  // Self-healing camera (2026-10-04): two ways the picture used to die for good —
+  // Chrome killed under the page (every shot "Session closed" until restart) and
+  // a scene that lost its world after a body reconnect (solid sky, 4 KB frames,
+  // X-Camera: live). Both now rebuild the viewer on the live body.
+  let flatFrames = 0;
+  let lastCameraRebuild = 0;
+  const rebuildCamera = async (why: string) => {
+    lastCameraRebuild = Date.now();
+    flatFrames = 0;
+    lastFrame = undefined;
+    cameraError = undefined;
+    cameraWarmingSince = undefined;
+    sys(`camera rebuilt: ${why}`);
+    await resetCamera(bot);
+  };
   let cameraWarmingSince: number | undefined;
 
   /** One capture loop feeds every viewer; it only runs while someone watches
@@ -565,14 +580,27 @@ export function startWeb(
           lastFrame = { jpg, at: Date.now() };
           pushFrame(jpg);
           framesSent++;
+          flatFrames = jpg.length < FLAT_FRAME_BYTES && !!bot.entity ? flatFrames + 1 : 0;
+          if (shouldRebuildCamera({ flatFrames, lastRebuildAt: lastCameraRebuild, now: Date.now() })) {
+            await rebuildCamera(`${flatFrames} flat frames in a row (${jpg.length} B) while the body is in the world — the scene had lost its world`);
+            break; // the watchers are still attached; the loop below restarts the warm-up for them
+          }
           await new Promise((r) => setTimeout(r, Math.max(50, FRAME_MS - (Date.now() - t0))));
         }
+        if (mjpegClients.size > 0) { cameraLoop = null; setTimeout(ensureCameraLoop, 0); }
       } catch (err) {
         cameraError = err instanceof Error ? err.message : String(err);
         cameraWarmingSince = undefined;
-        for (const res of mjpegClients) res.end();
-        mjpegClients.clear();
         sys(`camera stream died: ${cameraError}`);
+        if (isCameraSessionError(cameraError) && Date.now() - lastCameraRebuild >= 15_000) {
+          // The browser is gone, not the picture: rebuild and let the watchers
+          // ride the next warm-up instead of being cut off until a restart.
+          await rebuildCamera(`browser session lost (${cameraError.slice(0, 80)})`);
+          if (mjpegClients.size > 0) { cameraLoop = null; setTimeout(ensureCameraLoop, 0); }
+        } else {
+          for (const res of mjpegClients) res.end();
+          mjpegClients.clear();
+        }
       } finally {
         clearInterval(pulse);
         cameraLoop = null;
@@ -731,7 +759,16 @@ export function startWeb(
           return res.end(WARMING_JPEG);
         }
         cameraWarmingSince = undefined;
-        const jpg = (await page.p.screenshot({ type: 'jpeg', quality: 60 })) as Uint8Array;
+        let jpg: Uint8Array;
+        try {
+          jpg = (await page.p.screenshot({ type: 'jpeg', quality: 60 })) as Uint8Array;
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          if (!isCameraSessionError(msg)) throw err;
+          await rebuildCamera(`browser session lost on snapshot (${msg.slice(0, 80)})`);
+          res.writeHead(200, jpegHeaders({ 'X-Camera': 'warming' }));
+          return res.end(WARMING_JPEG);
+        }
         lastFrame = { jpg, at: Date.now() };
         framesSent++;
         res.writeHead(200, jpegHeaders({ 'X-Camera': 'live' }));
