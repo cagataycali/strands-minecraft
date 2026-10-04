@@ -137,6 +137,26 @@ export const PAGE_HTML = /* html */ `<!doctype html>
           align-items:center; justify-content:center; gap:14px; padding:24px; text-align:center; }
   #gate.hidden { display:none; }
   #gate p { color:#8b98a5; max-width:320px; }
+  /* Phone: #side is invisible to layout, its children stay body's flex items. */
+  #side { display:contents; }
+  /* Desktop (≥900px): the 16:9 stage used to be the whole viewport (1440×810 of
+     900) and the feed got 20px. Two columns instead — the world on the left,
+     letterboxed to whatever height is there; the conversation on the right as a
+     phone-width column with its own scroll, composer pinned to its bottom. */
+  @media (min-width: 900px) {
+    body { display:grid; grid-template-columns:minmax(0,1fr) clamp(360px, 32vw, 460px);
+           grid-template-rows:100dvh; }
+    #stage { display:flex; flex-direction:column; justify-content:center; min-height:0;
+             padding-top:0; }
+    #video { flex:1; min-height:0; aspect-ratio:auto; object-fit:contain; }
+    #stage:not(.full) { cursor:zoom-in; }
+    #side { display:flex; flex-direction:column; min-height:0; position:relative;
+            background:#0b0e14; border-left:1px solid #1c2230; }
+    #jump { position:absolute; bottom:120px; }
+    #toast { bottom:88px; left:auto; right:16px; transform:translateY(8px); max-width:420px; }
+    #toast.show { transform:translateY(0); }
+    #feed { padding:12px 16px; }
+  }
 </style>
 </head>
 <body>
@@ -160,6 +180,7 @@ export const PAGE_HTML = /* html */ `<!doctype html>
     </div>
   </div>
 </div>
+<div id="side">
 <div id="crew"></div>
 <div id="filters"></div>
 <div id="feed"></div>
@@ -170,6 +191,7 @@ export const PAGE_HTML = /* html */ `<!doctype html>
   <input id="msg" type="text" placeholder="tell the bot…" autocomplete="off">
   <button id="sendBtn">send</button>
 </form>
+</div>
 <div id="toast"></div>
 <script>
 const b64uToBuf = (s) => Uint8Array.from(atob(s.replace(/-/g,'+').replace(/_/g,'/')), c => c.charCodeAt(0));
