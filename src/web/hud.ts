@@ -58,3 +58,12 @@ export function vitalsModel(t: any, now: number, staleMs?: number): Vitals {
   if (task.since_s > 0 && state !== 'idle') state += ' \u00b7 ' + (task.since_s < 60 ? task.since_s + 's' : Math.floor(task.since_s / 60) + 'm');
   return { state: state, stale: stale, chips: chips };
 }
+
+/**
+ * Every `system` event used to be painted alarm-red — boot banners, memory
+ * census lines and camera receipts alike, so a real alarm looked like
+ * everything else. Only lines that carry an alarm word stay red.
+ */
+export function systemTone(text: string): 'alert' | 'quiet' {
+  return /\b(error|fail(ed|ure)?|kicked|died|death|stop(ped)?|crash|oom|🚨|⛔|intruder|disconnect)/i.test(text || '') ? 'alert' : 'quiet';
+}

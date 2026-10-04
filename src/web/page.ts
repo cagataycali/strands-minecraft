@@ -10,7 +10,7 @@
  *    scrolls under it; the composer sticks to the bottom above the keyboard.
  */
 import { veilFor } from './veil.js';
-import { stopReceipt, mcClock, vitalsModel } from './hud.js';
+import { stopReceipt, mcClock, vitalsModel, systemTone } from './hud.js';
 
 export const PAGE_HTML = /* html */ `<!doctype html>
 <html lang="en">
@@ -73,7 +73,7 @@ export const PAGE_HTML = /* html */ `<!doctype html>
   #vchips::-webkit-scrollbar { display:none; }
   .vchip { flex:none; border:1px solid #2a3242; border-radius:8px; padding:2px 8px; color:#aeb8c2;
            font-variant-numeric:tabular-nums; font-feature-settings:'tnum'; }
-  .vchip b { color:#66707c; font-weight:500; margin-right:5px; text-transform:uppercase; font-size:10px; letter-spacing:.5px; }
+  .vchip b { color:#8b98a5; font-weight:500; margin-right:5px; text-transform:uppercase; font-size:10px; letter-spacing:.5px; }
   .vchip.warn { border-color:#5a4a1a; color:#e3b341; } .vchip.bad { border-color:#6e2c31; color:#ff7b72; }
   #stage.full #vitals { display:none; }
   #vstall { position:absolute; inset:0; display:none; align-items:center; justify-content:center;
@@ -91,7 +91,7 @@ export const PAGE_HTML = /* html */ `<!doctype html>
   /* Chat-style feed: my messages right, the bot's left, everything else quiet rows. */
   .ev { display:flex; flex-direction:column; margin:0 0 8px; word-wrap:break-word; }
   .ev .bubble { max-width:82%; padding:8px 12px; border-radius:16px; white-space:pre-wrap; }
-  .ev .meta { font-size:10px; color:#66707c; margin:2px 6px 0; }
+  .ev .meta { font-size:11px; color:#8b98a5; margin:2px 6px 0; }
   .ev.in { align-items:flex-end; }
   .ev.in .bubble { background:#1f6feb; color:#fff; border-bottom-right-radius:4px; }
   .ev.out { align-items:flex-start; }
@@ -105,9 +105,10 @@ export const PAGE_HTML = /* html */ `<!doctype html>
   .ev.journey .bubble { color:#d29922; }
   .ev.worker .bubble { color:#bc8cff; }
   .ev.thought .bubble { font-style:italic; }
-  .ev.system .bubble { color:#e5534b; }
+  .ev.system .bubble { color:#9aa5b1; }
+  .ev.system.alert .bubble { color:#ff7b72; }
   .ev.voice .bubble { color:#58c6ff; }
-  .day { display:flex; align-items:center; gap:10px; color:#66707c; font-size:11px; margin:14px 0 10px; }
+  .day { display:flex; align-items:center; gap:10px; color:#8b98a5; font-size:11px; margin:14px 0 10px; }
   .day::before, .day::after { content:''; flex:1; border-top:1px solid #1c2230; }
   /* Kind filters: which event kinds the feed shows. Off-pills collect an
      unread count so muted noise is still discoverable. */
@@ -115,7 +116,7 @@ export const PAGE_HTML = /* html */ `<!doctype html>
              -webkit-overflow-scrolling:touch; }
   #filters::-webkit-scrollbar { display:none; }
   .fpill { display:flex; align-items:center; gap:5px; background:none; border:1px solid #2a3242;
-           color:#66707c; border-radius:12px; padding:3px 10px; font-size:12px; flex:none; }
+           color:#8b98a5; border-radius:12px; padding:5px 11px; font-size:12px; flex:none; min-height:28px; }
   .fpill.on { color:#dce3ea; background:#1c2230; }
   .fbadge { background:#1f6feb; color:#fff; border-radius:8px; padding:0 5px; font-size:10px;
             min-width:16px; text-align:center; }
@@ -134,7 +135,7 @@ export const PAGE_HTML = /* html */ `<!doctype html>
   .card .cname { font-weight:600; display:flex; justify-content:space-between; gap:6px; }
   .card.worker .cname { color:#bc8cff; }
   .card.journey .cname { color:#d29922; }
-  .card .csteps { color:#66707c; font-weight:400; }
+  .card .csteps { color:#8b98a5; font-weight:400; }
   .card .cline { color:#8b98a5; margin-top:2px; overflow:hidden; display:-webkit-box;
                  -webkit-line-clamp:2; -webkit-box-orient:vertical; }
   #chips { display:flex; gap:8px; overflow-x:auto; padding:8px 14px 0; background:#10141c;
@@ -170,6 +171,8 @@ export const PAGE_HTML = /* html */ `<!doctype html>
           align-items:center; justify-content:center; gap:14px; padding:24px; text-align:center; }
   #gate.hidden { display:none; }
   #gate p { color:#8b98a5; max-width:320px; }
+  .sr { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; }
+  #feed:focus-visible, #vchips:focus-visible, #crew:focus-visible, #filters:focus-visible, #chips:focus-visible { outline:2px solid #58a6ff; outline-offset:-2px; }
   /* Phone: #side is invisible to layout, its children stay body's flex items. */
   #side { display:contents; }
   /* Desktop (≥900px): the 16:9 stage used to be the whole viewport (1440×810 of
@@ -201,7 +204,7 @@ export const PAGE_HTML = /* html */ `<!doctype html>
   <p id="gateMsg">…</p>
   <button id="gateBtn" style="display:none"></button>
 </div>
-<div id="stage">
+<div id="stage" role="region" aria-label="world view">
   <div id="view">
   <img id="video" alt="">
   <div id="vstall" role="status"><span><span class="spin"></span><span id="vtext"></span></span></div>
@@ -220,22 +223,23 @@ export const PAGE_HTML = /* html */ `<!doctype html>
   </div>
   <div id="vitals" aria-live="polite" aria-label="bot vitals">
     <div id="vstate">no telemetry yet</div>
-    <div id="vchips"></div>
+    <div id="vchips" tabindex="0" aria-label="vitals"></div>
   </div>
 </div>
-<div id="side">
-<div id="crew"></div>
-<div id="filters"></div>
-<div id="feed"></div>
+<main id="side">
+<h1 class="sr">StrandsBot live</h1>
+<div id="crew" tabindex="0" aria-label="journeys and workers"></div>
+<div id="filters" role="group" tabindex="0" aria-label="feed filters"></div>
+<div id="feed" role="log" aria-label="feed" tabindex="0"></div>
 <button id="jump" type="button">new messages ↓</button>
-<div id="chips"></div>
+<div id="chips" tabindex="0" aria-label="quick messages"></div>
 <form id="composer">
-  <button id="callBtn" type="button" data-state="idle" title="voice call">📞</button>
-  <input id="msg" type="text" placeholder="tell the bot…" autocomplete="off">
+  <button id="callBtn" type="button" data-state="idle" title="voice call" aria-label="voice call">📞</button>
+  <input id="msg" type="text" placeholder="tell the bot…" aria-label="message to the bot" autocomplete="off">
   <button id="sendBtn">send</button>
 </form>
-</div>
-<div id="toast"></div>
+</main>
+<div id="toast" role="status"></div>
 <script>
 const b64uToBuf = (s) => Uint8Array.from(atob(s.replace(/-/g,'+').replace(/_/g,'/')), c => c.charCodeAt(0));
 const bufToB64u = (b) => btoa(String.fromCharCode(...new Uint8Array(b))).replace(/\\+/g,'-').replace(/\\//g,'_').replace(/=+$/,'');
@@ -289,6 +293,7 @@ ${veilFor.toString()}
 ${stopReceipt.toString()}
 ${mcClock.toString()}
 ${vitalsModel.toString()}
+${systemTone.toString()}
 
 const feed = document.getElementById('feed');
 const jump = document.getElementById('jump');
@@ -318,6 +323,7 @@ function renderFilters() {
     const b = document.createElement('button');
     b.type = 'button';
     b.className = 'fpill' + (shown.has(k) ? ' on' : '');
+    b.setAttribute('aria-pressed', shown.has(k) ? 'true' : 'false');
     b.textContent = LABELS[k];
     if (!shown.has(k) && unread[k]) {
       const s = document.createElement('span');
@@ -340,7 +346,7 @@ const atBottom = () => feed.scrollHeight - feed.scrollTop - feed.clientHeight < 
 
 function evNode(ev) {
   const div = document.createElement('div');
-  div.className = 'ev ' + ev.kind;
+  div.className = 'ev ' + ev.kind + (ev.kind === 'system' ? ' ' + systemTone(ev.text) : '');
   const bubble = document.createElement('div');
   bubble.className = 'bubble';
   bubble.textContent = ev.text;

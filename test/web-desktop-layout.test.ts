@@ -16,7 +16,7 @@ test('desktop breakpoint turns body into a two-column grid', () => {
 });
 
 test('the conversation column wraps feed, filters, chips and the composer', () => {
-  const side = page.match(/<div id="side">([\s\S]*?)<\/div>\n<div id="toast">/)?.[1] ?? '';
+  const side = page.match(/<main id="side">([\s\S]*?)<\/main>\n<div id="toast"/)?.[1] ?? '';
   for (const id of ['crew', 'filters', 'feed', 'jump', 'chips', 'composer']) {
     assert.ok(side.includes(`id="${id}"`), `#side contains #${id}`);
   }
