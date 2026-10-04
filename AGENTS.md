@@ -3,7 +3,7 @@
 Guide for AI coding agents working in **strands-minecraft** — a Minecraft bot
 where every bot *is* a [Strands](https://github.com/strands-agents) agent and
 the full mineflayer surface is exposed as tools. ~18k lines of TypeScript,
-86 test files, runs through `tsx` (no build step to run).
+87 test files, runs through `tsx` (no build step to run).
 
 Human docs live in `README.md` (features + how to play). This file is the
 map for *changing the code*.
