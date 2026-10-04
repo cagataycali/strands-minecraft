@@ -243,11 +243,9 @@ talks straight into the session — phone-first, installable (Add to Home Screen
   (the first frame takes ~30 s) → *stream stalled* → *camera broken: …* → *bot is not in the
   world* → *dashboard unreachable*. The dot is green (live), amber (feed up, body out of the
   world) or red (feed down).
-- **Second bot in the same world?** Put the other bots in `PEER_BOTS` on *both* sides. Peers are then
-  heard *slowly* (`src/peerchat.ts`): their lines are batched — 1 s debounce so a three-line reply is one
-  turn, at most one peer turn per 5 s, and after 3 exchanges with no human in between the bot goes quiet
-  (peer lines ride the free notes rail) until a human speaks or 2 min pass. Two bots that read each
-  other as humans chat forever and buy a model turn per line; `PEER_CHAT=mute` logs them and never answers.
+- **Second bot in the same world?** Put the other bots in `PEER_BOTS` on *both* sides. Peers are heard
+  *slowly* (`src/peerchat.ts`): lines batched (1 s debounce), ≤ 1 peer turn per 5 s, quiet after 3 exchanges
+  until a human speaks. Bots that read each other as humans chat forever; `PEER_CHAT=mute` never answers.
 - axe: 0 violations on phone and desktop (contrast AA, landmarks, keyboard-reachable scrollers).
 
 ```bash
