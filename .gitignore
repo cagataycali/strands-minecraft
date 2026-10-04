@@ -7,3 +7,5 @@ bot.log
 dist/
 mc-data/
 node_modules/
+instances/*.env
+instances/*.pid
