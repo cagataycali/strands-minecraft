@@ -5,6 +5,27 @@ import viewerPkg from 'prismarine-viewer';
 const mineflayerViewer = viewerPkg.mineflayer;
 
 const VIEWER_PORT = Number(process.env.VIEWER_PORT ?? 3007);
+
+/** CAMERA_DISABLED=true — no viewer server, no Chrome, every camera call fails
+ *  with this one sentence. For tests and headless CI boxes; the routes then
+ *  answer their honest `broken:` placeholder instead of launching anything. */
+export function cameraDisabledReason(env: NodeJS.ProcessEnv = process.env): string | undefined {
+  return /^(1|true|yes)$/i.test(env.CAMERA_DISABLED ?? '') ? 'camera disabled (CAMERA_DISABLED=true)' : undefined;
+}
+
+/** Is `port` free to listen on right now? The viewer's own listen() error is an
+ *  uncaught exception (prismarine-viewer never exposes its http server), so the
+ *  only safe move is to ask first — a worker camera that lands on a busy port
+ *  (the dashboard's, another instance's) would otherwise kill the process. */
+export async function portFree(port: number, host = '127.0.0.1'): Promise<boolean> {
+  const net = await import('node:net');
+  return new Promise((resolve) => {
+    const srv = net.createServer();
+    srv.unref();
+    srv.once('error', () => resolve(false));
+    srv.listen(port, host, () => srv.close(() => resolve(true)));
+  });
+}
 const CHROME_PATHS = [
   process.env.CHROME_PATH,
   '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
@@ -96,6 +117,9 @@ export const FLAT_FRAME_BYTES = 6_000;
 /** Tear the camera down completely — browser, page, viewer server — so the
  *  next ensureViewer() builds a fresh one on the CURRENT body. */
 export async function resetCamera(bot: Bot): Promise<void> {
+  // Worker pages live in the SAME browser: closing it kills them all, so
+  // their bookkeeping must say so or the next request would screenshot ghosts.
+  for (const id of [...workerCams.keys()]) await closeWorkerCamera(id);
   try { await state.browser?.close(); } catch { /* already gone */ }
   try { (bot as unknown as { viewer?: { close(): void } }).viewer?.close(); } catch { /* not started */ }
   state.browser = null;
@@ -104,7 +128,109 @@ export async function resetCamera(bot: Bot): Promise<void> {
   state.needsReload = false;
 }
 
+// ── 👷 worker cameras: one viewer per worker, one PAGE each, ONE Chrome ──────
+
+interface WorkerCam {
+  id: string;
+  port: number;
+  bot: Bot;
+  started: boolean;
+  page: import('puppeteer-core').Page | null;
+  warmingSince?: number;
+  /** one warm-up at a time per worker — ensure is not re-entrant */
+  warming?: Promise<import('puppeteer-core').Page>;
+}
+
+const workerCams = new Map<string, WorkerCam>();
+
+/** How many worker cameras exist right now — the memcheck collection (MEMORY.md rule 3). */
+export function workerCameraCount(): number {
+  return workerCams.size;
+}
+
+/** Viewer ports the worker cameras hold — so a new one is allocated past them. */
+export function workerViewerPorts(): number[] {
+  return [...workerCams.values()].map((c) => c.port);
+}
+
+/** The viewer port worker `id`'s camera actually bound (it may have walked past a busy one). */
+export function workerCameraPort(id: string): number | undefined {
+  return workerCams.get(id)?.port;
+}
+
+export function workerCameraWarmup(id: string): { sinceMs: number } | undefined {
+  const c = workerCams.get(id);
+  return c?.warmingSince === undefined ? undefined : { sinceMs: Date.now() - c.warmingSince };
+}
+
+/**
+ * The page that shows worker `id`'s eyes. First call starts a prismarine-viewer
+ * on the worker's own bot at `port` and opens a tab for it in the shared
+ * headless Chrome (launched here if the main camera has not yet); later calls
+ * return the warm page. A worker camera shares FRAME_MS, the browser, and the
+ * renice with the main one — it costs one more viewer server and one more tab,
+ * not a second Chrome.
+ */
+export async function getWorkerCameraPage(id: string, bot: Bot, port: number): Promise<import('puppeteer-core').Page> {
+  if (browserGone()) {
+    for (const c of workerCams.values()) { c.page = null; }
+    state.browser = null;
+    state.page = null;
+  }
+  let cam = workerCams.get(id);
+  if (!cam) {
+    cam = { id, port, bot, started: false, page: null };
+    workerCams.set(id, cam);
+  }
+  if (cam.page && !cam.page.isClosed()) return cam.page;
+  if (cam.warming) return cam.warming;
+  cam.warming = (async () => {
+    cam!.warmingSince = Date.now();
+    try {
+      const off = cameraDisabledReason();
+      if (off) throw new Error(off);
+      if (!cam!.started) {
+        // Walk forward from the allocated port until one is free: the viewer's
+        // listen() failure would be an uncaught exception, not a rejection.
+        let tries = 0;
+        while (!(await portFree(cam!.port))) {
+          cam!.port++;
+          if (++tries > 50) throw new Error(`no free viewer port near ${cam!.port - tries} for worker ${id}`);
+        }
+        mineflayerViewer(bot, { port: cam!.port, firstPerson: true, viewDistance: 3 });
+        cam!.started = true;
+      }
+      const browser = await ensureBrowser();
+      const page = await browser.newPage();
+      await page.setViewport({ width: 960, height: 540 });
+      await page.goto(`http://localhost:${cam!.port}`, { waitUntil: 'domcontentloaded', timeout: 30000 });
+      await page.waitForSelector('canvas', { timeout: 15000 }).catch(() => {});
+      await new Promise((r) => setTimeout(r, SETTLE_MS));
+      cam!.page = page;
+      return page;
+    } finally {
+      cam!.warmingSince = undefined;
+      cam!.warming = undefined;
+    }
+  })();
+  return cam.warming;
+}
+
+/** A dead worker closes its page and its viewer — nothing of it stays in Chrome. */
+export async function closeWorkerCamera(id: string): Promise<boolean> {
+  const cam = workerCams.get(id);
+  if (!cam) return false;
+  workerCams.delete(id);
+  try { if (cam.page && !cam.page.isClosed()) await cam.page.close(); } catch { /* browser already gone */ }
+  try { (cam.bot as unknown as { viewer?: { close(): void } }).viewer?.close(); } catch { /* not started */ }
+  cam.page = null;
+  cam.started = false;
+  return true;
+}
+
 async function ensureViewer(bot: Bot): Promise<import('puppeteer-core').Page> {
+  const off = cameraDisabledReason();
+  if (off) throw new Error(off);
   if (browserGone()) {
     // Chrome died (killed, crashed, OOM): the page handle is a ghost. Drop both
     // and fall through to a full warm-up instead of screenshotting a corpse.
@@ -144,7 +270,11 @@ async function ensureViewer(bot: Bot): Promise<import('puppeteer-core').Page> {
   }
 }
 
-async function warmUp(_bot: Bot): Promise<import('puppeteer-core').Page> {
+/** The one headless Chrome every camera page lives in — launched on first use,
+ *  relaunched after it died (browserGone). Main camera and worker cameras share
+ *  it: N pictures = N tabs, never N browsers. */
+async function ensureBrowser(): Promise<import('puppeteer-core').Browser> {
+  if (state.browser && !browserGone()) return state.browser;
   const { launch } = await import('puppeteer-core');
   const fs = await import('node:fs');
   const executablePath = CHROME_PATHS.find((p) => fs.existsSync(p));
@@ -166,7 +296,12 @@ async function warmUp(_bot: Bot): Promise<import('puppeteer-core').Page> {
   // renice can be refused, and Windows has no such command — a camera that
   // stays greedy is a nuisance, a crash here would be worse.
   await nicenChrome(state.browser);
-  state.page = await state.browser.newPage();
+  return state.browser;
+}
+
+async function warmUp(_bot: Bot): Promise<import('puppeteer-core').Page> {
+  const browser = await ensureBrowser();
+  state.page = await browser.newPage();
   await state.page.setViewport({ width: 960, height: 540 });
   // 'domcontentloaded', NOT 'networkidle2': the viewer page holds a live
   // socket.io connection streaming chunks forever, so the network is NEVER
@@ -241,6 +376,7 @@ export function visionTools(bot: Bot) {
 }
 
 export async function closeViewer(bot: Bot) {
+  for (const id of [...workerCams.keys()]) await closeWorkerCamera(id);
   try {
     await state.browser?.close();
   } catch { /* already closed */ }

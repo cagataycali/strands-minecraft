@@ -7,6 +7,7 @@ import { createModel, describeModel, resolveModelSpec } from './model.js';
 import { Session } from './session.js';
 import { JourneyRunner, journeyTools } from './journeys.js';
 import { Fleet, fleetTools, crewSnapshot } from './fleet.js';
+import { defaultWorkerName } from './web/crew.js';
 import { writePlace, recordDeath, deathContext, noteDamageSource } from './tools/memory.js';
 import { Thinker } from './thinker.js';
 import { startSentinel } from './sentinel.js';
@@ -133,7 +134,7 @@ const main = async () => {
   };
   fleet.onProgress = (w, line) => {
     console.log(`👥 [${w.name} #${w.steps}] ${line}`);
-    web?.log('worker', `${w.name} #${w.steps}`, line);
+    web?.log('worker', `${w.name} #${w.steps}`, line, undefined, { workerId: w.id });
     if (w.status === 'working' || w.status === 'connecting') return;
     // Terminal state: the BOSS must hear it, not just the console — otherwise
     // the primary agent never learns its hire finished and can't relay the
@@ -321,7 +322,8 @@ const main = async () => {
       return {
         task,
         thinker: { enabled: thinker.enabled, next_in_s: thinker.nextInS() },
-        crew: workers.map((w) => ({ name: w.name, job: w.task, alive: w.status === 'working' || w.status === 'connecting' })),
+        // CREW.md: rows GAIN id + goal (additive; name/job/alive unchanged).
+        crew: workers.map((w) => ({ id: w.id, name: w.name, job: w.task, goal: w.task, alive: w.status === 'working' || w.status === 'connecting' })),
         connection: { connected: !!bot.entity && !!bot.player, epoch: body.epoch(), reconnects: reconnects },
         mem: { heapMb: Math.round(process.memoryUsage().heapUsed / 1048576), limitMb: heapLimitMb() },
       };
@@ -332,6 +334,16 @@ const main = async () => {
       if (j && journeys.stop(j.id)) stopped.push(`journey ${j.id}`);
       web?.log('system', 'tiny', `STOP — halted ${stopped.join(', ') || 'nothing (idle)'}`);
       return stopped;
+    },
+    // 👷 Workers as bodies (CREW.md): the fleet behind GET/POST /api/workers…
+    crew: {
+      list: () => fleet.list(),
+      byId: (id) => fleet.byId(id),
+      hire: (goal, name) => fleet.hire(name ?? defaultWorkerName(fleet.list().length + 1, fleet.list().map((w) => w.name)), goal),
+      retire: (id) => { const w = fleet.byId(id); return !!w && fleet.dismiss(w.name); },
+      stop: (id) => fleet.stop(id),
+      max: cfg.fleet.maxWorkers,
+      onReleased: (fn) => { fleet.onReleased = fn; },
     },
   });
 
@@ -659,6 +671,10 @@ const main = async () => {
   for (const [name, size] of Object.entries(web?.sizes() ?? {})) {
     memoryProbe.track(name, () => web?.sizes()[name] ?? size);
   }
+  // CREW.md: worker cameras are bounded by the live crew — a page outliving its
+  // body is the same retention shape as #44, and the cap names it on sight.
+  memoryProbe.track('web.workerCams', () => web?.sizes()['web.workerCams'] ?? 0, cfg.fleet.maxWorkers + 2);
+  memoryProbe.track('camera.workerPages', () => web?.sizes()['camera.workerPages'] ?? 0, cfg.fleet.maxWorkers + 2);
   memoryProbe.start(
     (line, level) => {
       if (level === 'warn') console.error(`🚨 ${line}`); else console.log(`🧮 ${line}`);

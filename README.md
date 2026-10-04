@@ -8,7 +8,7 @@
   <img alt="node" src="https://img.shields.io/badge/node-%E2%89%A5%2022-3fb950">
   <img alt="strands" src="https://img.shields.io/badge/Strands%20SDK-%5E1.13-3fb950">
   <img alt="tools" src="https://img.shields.io/badge/tools-60%20%3D%20100%25%20of%20mineflayer-3fb950">
-  <img alt="tests" src="https://img.shields.io/badge/tests-833-3fb950">
+  <img alt="tests" src="https://img.shields.io/badge/tests-845-3fb950">
 </p>
 
 <p align="center">
@@ -287,19 +287,19 @@ re-run re-points the same row. `MINECRAFT_PUBLIC_URL` replaces `--endpoint`; the
 default — without either, enroll refuses with the variable's name.
 
 <details>
-<summary><b>The six routes tiny calls</b> — <code>/api/health</code> public; telemetry, camera, stream, events, chat, stop take the token as <code>Authorization: Bearer</code>, <code>?token=</code> or your passkey cookie, else <code>401 {ok:false}</code></summary>
+<summary><b>The routes tiny calls</b> — <code>/api/health</code> public; telemetry, camera, stream, events, chat, stop and the <code>/api/workers</code> family take the token as <code>Authorization: Bearer</code>, <code>?token=</code> or your passkey cookie, else <code>401 {ok:false}</code></summary>
 
 | route | gate | what |
 |---|---|---|
 | `GET /api/health` | public | `{ok, body, name, mc:{host,port,version,connected,epoch}, camera, auth, uptime_s}` — `mc.connected` is the presence rule (dashboard up ≠ bot in the world) |
 | `GET /api/telemetry` | token | pos, yaw/pitch, health, food, air, xp, time, weather, biome, gamemode, held, inventory (summed, ≤40), nearby players/hostiles, task, thinker, crew, connection, mem |
-| `GET /api/camera/snapshot` | token | one JPEG from the bot's eyes; `X-Camera: live｜warming｜broken: …` |
-| `GET /api/stream.mjpeg` · `GET /api/events` | token | aliases of the dashboard's MJPEG and SSE feed |
+| `GET /api/camera/snapshot` · `GET /api/stream.mjpeg` · `GET /api/events` | token | one JPEG from the bot's eyes (`X-Camera: live｜warming｜broken: …`); aliases of the dashboard's MJPEG and SSE feed |
 | `POST /api/chat {prompt, wait_s?}` | token, 5/s | a turn on the same rail as `/api/say`; waits ≤ `wait_s` (20, max 40) → `{ok, reply, turn_id, done, task}`; `done:false` = still working, the answer lands on `/api/events` tagged `replyTo=turn_id` |
 | `POST /api/stop` | token, 5/s | halt legs, dig and the running journey → `{ok, stopped:[…]}` (a model turn mid-thought finishes its step) |
+| `GET /api/workers` · `POST /api/workers {goal, name?}` · `DELETE /api/workers/:id` | token (writes 5/s) | the crew as **bodies**: `{ok, bot, workers:[{id, name, goal, state: working｜idle｜stalled｜dead, alive, pos, health, food, since_s, steps, camera}]}` — ids `w-<n>` are stable for the worker's life; hire = `manage_bots hire` (201 + the row, 409 on a live duplicate name); retire = dismiss. `/api/telemetry.crew` rows gain `id`+`goal`, `worker` SSE events gain `workerId`, `/api/health` gains `workers:{alive, max}` |
+| `GET /api/workers/:id/telemetry` · `GET /api/workers/:id/camera/snapshot` · `GET /api/workers/:id/stream.mjpeg` · `POST /api/workers/:id/stop` | token | one worker's own telemetry shape; one JPEG from its eyes (its own viewer, a page in the same headless Chrome — `X-Camera: live｜warming｜broken: …`, never 404 while alive, near-field since workers load viewDistance 3); ~3 fps MJPEG only while watched; reflex-level stop → `{ok, id, stopped:[…]}`, no model turn |
 
-`WEB_AUTH_DISABLED=true` still means **loopback only** — from Docker's bridge or the tunnel, every
-caller needs the token.
+`WEB_AUTH_DISABLED=true` still means **loopback only** — from Docker's bridge or the tunnel, every caller needs the token.
 </details>
 
 ## Grow it — a crew, a second bot, the knobs
@@ -392,7 +392,7 @@ mechanism and what the tests now pin:
   map.
 
 Layout: `src/index.ts` is the spine (rails, reflexes, CLI — read it first); `src/tools/` the 60
-tools by domain; `test/` 84 node:test files on a fake world + fake bot. File by file:
+tools by domain; `test/` 85 node:test files on a fake world + fake bot. File by file:
 [AGENTS.md → Layout](AGENTS.md#layout).
 
 **Roadmap.** Done: 100% mineflayer coverage · fleet · blueprints · persistent memory · vision ·

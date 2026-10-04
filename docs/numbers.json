@@ -1,6 +1,6 @@
 {
   "generated_by": "scripts/site-numbers.mjs",
-  "commit": "08a9e52",
+  "commit": "3ed8be0",
   "version": "0.1.0",
   "node": ">=22",
   "license": "MIT",
@@ -200,7 +200,7 @@
     "attack_entity": "src/tools/actions.ts:11",
     "build_blueprint": "src/tools/world.ts:200",
     "build_structure": "src/tools/world.ts:299",
-    "capture_view": "src/tools/vision.ts:220",
+    "capture_view": "src/tools/vision.ts:355",
     "check_darkness": "src/tools/perception.ts:241",
     "collect_ground_items": "src/tools/world.ts:58",
     "container_transact": "src/tools/actions.ts:171",
@@ -227,7 +227,7 @@
     "list_inventory": "src/tools/perception.ts:152",
     "look_around": "src/tools/perception.ts:51",
     "look_at": "src/tools/movement.ts:105",
-    "manage_bots": "src/fleet.ts:545",
+    "manage_bots": "src/fleet.ts:588",
     "mount_entity": "src/tools/movement.ts:176",
     "move": "src/tools/movement.ts:126",
     "place_block": "src/tools/world.ts:180",
@@ -255,10 +255,10 @@
     "write_book": "src/tools/inventory.ts:363",
     "write_sign": "src/tools/world.ts:358"
   },
-  "testFiles": 84,
-  "testCases": 833,
-  "loc": 19719,
-  "srcFiles": 48,
+  "testFiles": 85,
+  "testCases": 845,
+  "loc": 20364,
+  "srcFiles": 50,
   "rails": 7,
   "routes": [
     {
@@ -287,6 +287,34 @@
     },
     {
       "route": "GET /api/events",
+      "gate": "token"
+    },
+    {
+      "route": "GET /api/workers",
+      "gate": "token"
+    },
+    {
+      "route": "POST /api/workers",
+      "gate": "token"
+    },
+    {
+      "route": "GET /api/workers/:id/telemetry",
+      "gate": "token"
+    },
+    {
+      "route": "GET /api/workers/:id/camera/snapshot",
+      "gate": "token"
+    },
+    {
+      "route": "GET /api/workers/:id/stream.mjpeg",
+      "gate": "token"
+    },
+    {
+      "route": "POST /api/workers/:id/stop",
+      "gate": "token"
+    },
+    {
+      "route": "DELETE /api/workers/:id",
       "gate": "token"
     }
   ],

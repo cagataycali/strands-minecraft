@@ -25,8 +25,12 @@ import { tmpdir } from 'node:os';
 import type { Duplex } from 'node:stream';
 import { WebSocketServer, type WebSocket } from 'ws';
 import type { Bot } from 'mineflayer';
-import { getCameraPage, resetCamera, isCameraSessionError, shouldRebuildCamera, FLAT_FRAME_BYTES } from './tools/vision.js';
+import { getCameraPage, resetCamera, isCameraSessionError, shouldRebuildCamera, FLAT_FRAME_BYTES, getWorkerCameraPage, closeWorkerCamera, workerCameraCount, workerViewerPorts, workerCameraPort } from './tools/vision.js';
+import { matchWorkerRoute, workerRow, workersHealth, describeWorkerCamera, allocateViewerPort, hireRequest, headerSafe, type WorkerRow } from './web/crew.js';
+import type { Worker } from './fleet.js';
 import * as auth from './web/auth.js';
+import { stopBody } from './web/stop.js';
+export { stopBody };
 import { WARMING_JPEG, WARMING_PULSE_MS, mjpegPart } from './web/warming-frame.js';
 import { PAGE_HTML } from './web/page.js';
 import { WebSocketTransport, transportFactories, type TransportFactories } from './realtime/transport.js';
@@ -75,6 +79,9 @@ export interface FeedEvent {
   kind: 'in' | 'out' | 'journey' | 'thought' | 'worker' | 'chat' | 'system' | 'voice';
   who: string;
   text: string;
+  /** `worker` events: the contract id of the worker speaking (CREW.md) — a
+   *  card keyed by id survives a worker renamed or re-hired under the same name. */
+  workerId?: string;
   /**
    * For an `in`, its say id; for an `out`, the id of the ask it ANSWERS.
    *
@@ -280,7 +287,7 @@ export function createSayLedger(o: {
 
 export interface WebRail {
   /** Every rail calls this — the browser feed is a mirror of the console. */
-  log: (kind: FeedEvent['kind'], who: string, text: string, replyTo?: string) => void;
+  log: (kind: FeedEvent['kind'], who: string, text: string, replyTo?: string, extra?: { workerId?: string }) => void;
   close: () => void;
   /** Sizes of what the web rail holds, by name, for the memory probe (issue
    *  #44): the SSE ring pushed 2,124 events with zero watchers in one soak, and
@@ -302,6 +309,30 @@ export interface TinyRailOptions {
   mc?: () => { host: string; port: number; version: string | null; connected: boolean; epoch: number };
   /** Halt legs, dig and the running journey. Returns what it stopped. */
   stop?: () => string[];
+  /** 👷 The crew as bodies (CREW.md contract) — closures over the Fleet, so
+   *  web.ts never imports it. */
+  crew?: CrewRail;
+}
+
+/**
+ * What the worker routes need from the fleet. Every method is synchronous and
+ * cheap: the routes are polled at 1–3 fps by phones.
+ */
+export interface CrewRail {
+  /** Every ledger row the dashboard may show (crewSnapshot's filter applies upstream). */
+  list: () => Worker[];
+  /** One worker by contract id — undefined once it has been pruned. */
+  byId: (id: string) => Worker | undefined;
+  /** = manage_bots hire. Throws with a human reason (name taken, …). */
+  hire: (goal: string, name?: string) => Worker;
+  /** = manage_bots dismiss. false when no such worker. */
+  retire: (id: string) => boolean;
+  /** Reflex-level stop; undefined = no such worker. */
+  stop: (id: string) => string[] | undefined;
+  /** Advisory headcount for /api/health.workers.max. */
+  max: number;
+  /** Register the camera's "this body is gone" hook. */
+  onReleased: (fn: (w: Worker) => void) => void;
 }
 
 /** Authoritative background-work snapshot for /api/state — the crew strip
@@ -478,8 +509,8 @@ export function startWeb(
   // above keeps working while the picture is still coming (issue #18).
   let placeholdersSent = 0;
 
-  const log = (kind: FeedEvent['kind'], who: string, text: string, replyTo?: string) => {
-    const ev: FeedEvent = { ts: Date.now(), kind, who, text: text.slice(0, 2000), ...(replyTo ? { replyTo } : {}) };
+  const log = (kind: FeedEvent['kind'], who: string, text: string, replyTo?: string, extra?: { workerId?: string }) => {
+    const ev: FeedEvent = { ts: Date.now(), kind, who, text: text.slice(0, 2000), ...(replyTo ? { replyTo } : {}), ...(extra?.workerId ? { workerId: extra.workerId } : {}) };
     feed.push(ev);
     capFeed(feed, FEED_CAP);
     const line = `data: ${JSON.stringify(ev)}\n\n`;
@@ -608,6 +639,101 @@ export function startWeb(
     })();
   };
 
+
+  // ── 👷 worker cameras (CREW.md) ──────────────────────────────────────────
+  // One capture loop PER WORKER, each gated on its own watchers exactly like
+  // the main camera: no watcher, no screenshot. All pages live in the one
+  // headless Chrome (vision.ts); a dead worker's page closes with its body.
+  interface WorkerCamState {
+    clients: Set<http.ServerResponse>;
+    loop: Promise<void> | null;
+    lastFrame?: { jpg: Uint8Array; at: number };
+    frames: number;
+    error?: string;
+    warmingSince?: number;
+    port: number;
+    /** one snapshot warm-up at a time — the same non-reentrancy rule as cameraWarm */
+    warm: Promise<Awaited<ReturnType<typeof getWorkerCameraPage>>> | null;
+  }
+  const workerCams = new Map<string, WorkerCamState>();
+  // Never the viewer's own port, never a dashboard's (this one AND the default
+  // 3008 — a test on WEB_PORT=0 once allocated 3008 and tried to bind the live
+  // bot's dashboard).
+  const WORKER_CAM_AVOID = [Number(process.env.VIEWER_PORT ?? 3007), PORT, 3007, 3008];
+  const workerCam = (id: string): WorkerCamState => {
+    let c = workerCams.get(id);
+    if (!c) {
+      c = {
+        clients: new Set(), loop: null, frames: 0, warm: null,
+        port: allocateViewerPort(Number(process.env.VIEWER_PORT ?? 3007), [...workerViewerPorts(), ...[...workerCams.values()].map((x) => x.port)], WORKER_CAM_AVOID),
+      };
+      workerCams.set(id, c);
+    }
+    return c;
+  };
+  /** The body is gone: end every watcher, close the page + viewer, forget the state. */
+  const dropWorkerCam = async (id: string, why: string) => {
+    const c = workerCams.get(id);
+    if (c) {
+      for (const res of c.clients) { try { res.end(); } catch { /* gone */ } }
+      c.clients.clear();
+      workerCams.delete(id);
+    }
+    if (await closeWorkerCamera(id)) sys(`worker camera ${id} closed: ${why}`);
+  };
+  tiny?.crew?.onReleased((w) => { void dropWorkerCam(w.id, `${w.name} ${w.status}`); });
+
+  const pushWorkerFrame = (c: WorkerCamState, jpg: Uint8Array) => {
+    const part = mjpegPart(jpg);
+    for (const res of c.clients) { res.write(part.head); res.write(part.body); res.write(part.tail); }
+  };
+  const ensureWorkerCameraLoop = (id: string, w: Worker) => {
+    const c = workerCam(id);
+    if (c.loop) return;
+    c.loop = (async () => {
+      const pulse = setInterval(() => { if (c.clients.size > 0) pushWorkerFrame(c, WARMING_JPEG); }, WARMING_PULSE_MS);
+      pulse.unref?.();
+      try {
+        pushWorkerFrame(c, WARMING_JPEG);
+        c.warmingSince = Date.now();
+        c.error = undefined;
+        if (!w.body) throw new Error(`${w.name} has no body (${w.status})`);
+        const page = await getWorkerCameraPage(id, w.body.bot, c.port);
+        c.port = workerCameraPort(id) ?? c.port;
+        c.warmingSince = undefined;
+        clearInterval(pulse);
+        while (c.clients.size > 0 && workerCams.get(id) === c) {
+          const t0 = Date.now();
+          const jpg = (await page.screenshot({ type: 'jpeg', quality: 60 })) as Uint8Array;
+          c.lastFrame = { jpg, at: Date.now() };
+          pushWorkerFrame(c, jpg);
+          c.frames++;
+          await new Promise((r) => setTimeout(r, Math.max(50, FRAME_MS - (Date.now() - t0))));
+        }
+      } catch (err) {
+        c.error = err instanceof Error ? err.message : String(err);
+        c.warmingSince = undefined;
+        sys(`worker camera ${id} stream died: ${c.error}`);
+        for (const res of c.clients) res.end();
+        c.clients.clear();
+        // A dead session is the browser's doing, not this worker's: forget the
+        // page so the next watcher warms a fresh one instead of a ghost.
+        if (isCameraSessionError(c.error)) await closeWorkerCamera(id);
+      } finally {
+        clearInterval(pulse);
+        c.loop = null;
+      }
+    })();
+  };
+  const workerCameraLine = (w: Worker, now = Date.now()) => {
+    const c = workerCams.get(w.id);
+    return describeWorkerCamera({
+      alive: !!w.body && (w.status === 'working' || w.status === 'connecting'),
+      frames: c?.frames ?? 0, watchers: c?.clients.size ?? 0, error: c?.error, warmingSince: c?.warmingSince, now,
+    });
+  };
+  const rowOf = (w: Worker, now = Date.now()): WorkerRow => workerRow(w, workerCameraLine(w, now), now);
+
   // rpID/origin derived per-request: the same server answers as localhost in
   // dev and minecraft.yourdomain.com through the tunnel.
   const rpParts = (req: http.IncomingMessage) => {
@@ -705,6 +831,8 @@ export function startWeb(
             : { ok: true, why: describeCamera({ frames: framesSent, watchers: mjpegClients.size, error: cameraError, warmingSince: cameraWarmingSince, now: Date.now() }) },
           auth: { passkeys: auth.hasCredentials(), tiny_token: !!tinyToken(), ...(tinyToken() ? {} : { why: tinyTokenProblem() }) },
           uptime_s: Math.round((Date.now() - startedAt) / 1_000),
+          // CREW.md: how many worker bodies are up, and the advisory headcount.
+          ...(tiny?.crew ? { workers: workersHealth(tiny.crew.list(), tiny.crew.max) } : {}),
         });
       }
 
@@ -721,7 +849,7 @@ export function startWeb(
       // Writes only: a POST buys a model turn or moves the body; a read is a
       // cheap snapshot the phone polls at 3 fps next to telemetry — limiting
       // those would starve the panel it exists for.
-      if (viaToken && req.method === 'POST' && !limiter.take(presented!)) {
+      if (viaToken && (req.method === 'POST' || req.method === 'DELETE') && !limiter.take(presented!)) {
         res.setHeader('Retry-After', '1');
         return json(res, 429, { ok: false, error: 'rate limited — 5 writes per second per token' });
       }
@@ -737,7 +865,9 @@ export function startWeb(
         // one screenshot — but never a 30 s cold warm-up inside the relay's
         // budget: past ~8 s answer the warming placeholder (X-Camera: warming)
         // and let the warm-up finish in the background for the next call.
-        const jpegHeaders = (extra: Record<string, string> = {}) => ({ 'Content-Type': 'image/jpeg', 'Cache-Control': 'no-store', ...extra });
+        // X-Camera carries a free-text reason: fold it to ASCII or a `—` in the
+        // error turns this 200 into a 400 (found by the worker twin of this route).
+        const jpegHeaders = (extra: Record<string, string> = {}) => ({ 'Content-Type': 'image/jpeg', 'Cache-Control': 'no-store', ...Object.fromEntries(Object.entries(extra).map(([k, v]) => [k, headerSafe(v)])) });
         if (lastFrame && Date.now() - lastFrame.at < 1_500) {
           res.writeHead(200, jpegHeaders({ 'X-Camera': 'live' }));
           return res.end(lastFrame.jpg);
@@ -826,6 +956,95 @@ export function startWeb(
         const stopped = tiny?.stop?.() ?? stopBody(bot);
         sys(`STOP from tiny: ${stopped.join(', ') || 'nothing was running'}`);
         return json(res, 200, { ok: true, stopped, note: 'a model turn in flight finishes its current step; movement, digging and the journey are halted' });
+      }
+
+
+      // ── 👷 workers as bodies (CREW.md contract) ───────────────────────────
+      const wr = matchWorkerRoute(req.method ?? 'GET', url.pathname);
+      if (wr) {
+        const crew = tiny?.crew;
+        if (!crew) return json(res, 503, { ok: false, error: 'this rail has no fleet' });
+        const now = Date.now();
+        if (wr.kind === 'list') {
+          return json(res, 200, { ok: true, bot: bot.username ?? botCreateOptions().username, workers: crew.list().map((w) => rowOf(w, now)) });
+        }
+        if (wr.kind === 'hire') {
+          const body = hireRequest(await readBody(req).catch(() => ({})));
+          if ('error' in body) return json(res, 400, { ok: false, error: body.error });
+          try {
+            const w = crew.hire(body.goal, body.name);
+            sys(`hire from tiny: ${w.name} (${w.id}) — "${body.goal.slice(0, 80)}"`);
+            return json(res, 201, { ok: true, worker: rowOf(w, now) });
+          } catch (err) {
+            return json(res, 409, { ok: false, error: err instanceof Error ? err.message : String(err) });
+          }
+        }
+        const w = crew.byId(wr.id);
+        if (!w) return json(res, 404, { ok: false, error: `no worker ${wr.id}` });
+        if (wr.kind === 'retire') {
+          const was = w.status;
+          crew.retire(wr.id);
+          sys(`retire from tiny: ${w.name} (${w.id}) was ${was}`);
+          return json(res, 200, { ok: true, worker: rowOf(w, now) });
+        }
+        if (wr.kind === 'stop') {
+          const stopped = crew.stop(wr.id) ?? [];
+          sys(`STOP ${w.name} (${w.id}) from tiny: ${stopped.join(', ') || 'nothing (no body)'}`);
+          return json(res, 200, { ok: true, id: w.id, stopped, note: 'reflex-level: legs, controls and dig halted; the worker keeps its task and reassesses on its next step' });
+        }
+        if (wr.kind === 'telemetry') {
+          const row = rowOf(w, now);
+          const t = shapeTelemetry((w.body?.bot ?? { username: w.name }) as Partial<Bot> & { username?: string }, {
+            task: { kind: 'fleet', text: w.task, since_s: row.since_s },
+            crew: [],
+            connection: { connected: !!w.body?.bot.entity, epoch: w.body?.epoch() ?? 0, reconnects: 0 },
+          }, now);
+          return json(res, 200, { ...t, name: w.name, worker: row });
+        }
+        const alive = !!w.body && (w.status === 'working' || w.status === 'connecting');
+        const jpegHeaders = (extra: Record<string, string> = {}) => ({ 'Content-Type': 'image/jpeg', 'Cache-Control': 'no-store', ...Object.fromEntries(Object.entries(extra).map(([k, v]) => [k, headerSafe(v)])) });
+        if (wr.kind === 'snapshot') {
+          // Never a 404 while the worker is alive: a placeholder with an honest
+          // X-Camera header is the contract (CREW.md).
+          if (!alive) { res.writeHead(200, jpegHeaders({ 'X-Camera': `broken: worker ${w.status} — no body` })); return res.end(WARMING_JPEG); }
+          const c = workerCam(w.id);
+          if (c.lastFrame && now - c.lastFrame.at < 1_500) { res.writeHead(200, jpegHeaders({ 'X-Camera': 'live' })); return res.end(c.lastFrame.jpg); }
+          if (c.error && !isCameraSessionError(c.error)) { res.writeHead(200, jpegHeaders({ 'X-Camera': `broken: ${c.error.slice(0, 120)}` })); return res.end(WARMING_JPEG); }
+          c.warm ??= getWorkerCameraPage(w.id, w.body!.bot, c.port).finally(() => { c.warm = null; });
+          const got = await Promise.race([
+            c.warm.then((p) => ({ p })),
+            new Promise<{ p?: undefined }>((r) => setTimeout(() => r({}), 8_000)),
+          ]).catch((err) => { c.error = err instanceof Error ? err.message : String(err); return {} as { p?: undefined }; });
+          if (!got.p) {
+            if (!c.warmingSince && !c.error) { c.warmingSince = Date.now(); sys(`worker camera ${w.id} warming up (snapshot request) — viewer :${c.port} + page`); }
+            res.writeHead(200, jpegHeaders({ 'X-Camera': c.error ? `broken: ${c.error.slice(0, 120)}` : 'warming' }));
+            return res.end(WARMING_JPEG);
+          }
+          c.warmingSince = undefined;
+          try {
+            const jpg = (await got.p.screenshot({ type: 'jpeg', quality: 60 })) as Uint8Array;
+            c.lastFrame = { jpg, at: Date.now() };
+            c.frames++;
+            c.error = undefined;
+            res.writeHead(200, jpegHeaders({ 'X-Camera': 'live' }));
+            return res.end(jpg);
+          } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            if (!isCameraSessionError(msg)) throw err;
+            await closeWorkerCamera(w.id);
+            res.writeHead(200, jpegHeaders({ 'X-Camera': 'warming' }));
+            return res.end(WARMING_JPEG);
+          }
+        }
+        if (wr.kind === 'stream') {
+          if (!alive) return json(res, 410, { ok: false, error: `worker ${w.name} is ${w.status} — no body to stream` });
+          res.writeHead(200, { 'Content-Type': 'multipart/x-mixed-replace; boundary=frame', 'Cache-Control': 'no-store', Connection: 'close' });
+          res.flushHeaders();
+          const c = workerCam(w.id);
+          c.clients.add(res);
+          req.on('close', () => c.clients.delete(res));
+          return ensureWorkerCameraLoop(w.id, w);
+        }
       }
 
       if (route === 'GET /stream.mjpeg' || route === 'GET /api/stream.mjpeg') {
@@ -1096,10 +1315,15 @@ export function startWeb(
       'web.sse': sseClients.size,
       'web.mjpeg': mjpegClients.size,
       'web.tinyLimiter': limiter.size(),
+      // CREW.md / MEMORY.md rule 3: every new collection reports its own size.
+      'web.workerCams': workerCams.size,
+      'web.workerWatchers': [...workerCams.values()].reduce((n, c) => n + c.clients.size, 0),
+      'camera.workerPages': workerCameraCount(),
     }),
     close: () => {
       clearInterval(sayWatch);
       for (const res of [...sseClients, ...mjpegClients]) res.end();
+      for (const c of workerCams.values()) for (const res of c.clients) res.end();
       for (const c of wss?.clients ?? []) { try { c.close(); } catch { /* already gone */ } }
       wss?.close();
       server.close();
@@ -1129,15 +1353,3 @@ export function describeCamera(s: {
   return s.frames ? `streaming to ${s.watchers} watcher(s), ${s.frames} frames sent` : `watcher connected but NO frames yet — capture loop has not produced a frame`;
 }
 
-/**
- * 🛑 The body-level STOP — the same three calls the stop_moving tool makes
- * (tools/movement.ts) plus stopDigging. index.ts wraps this with the journey
- * stop; a bare web rail (tests, smoke) gets exactly this.
- */
-export function stopBody(bot: Partial<Bot>): string[] {
-  const stopped: string[] = [];
-  try { bot.pathfinder?.stop(); bot.pathfinder?.setGoal(null); stopped.push('pathfinder'); } catch { /* mid-swap */ }
-  try { bot.clearControlStates?.(); stopped.push('controls'); } catch { /* mid-swap */ }
-  try { if (bot.targetDigBlock) { bot.stopDigging?.(); stopped.push('digging'); } } catch { /* nothing to stop */ }
-  return stopped;
-}

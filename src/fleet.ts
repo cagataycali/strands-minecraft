@@ -36,6 +36,8 @@ import { LegsLock, registerLegs } from './legs.js';
 import { worldDigest, nearbyThreats } from './digest.js';
 import { cfg } from './config.js';
 import { memoryProbe } from './memcheck.js';
+import { workerId, nextWorkerCounter } from './web/crew.js';
+import { stopBody } from './web/stop.js';
 
 const MAX_STEPS = cfg.fleet.maxSteps;
 const MAX_WALL_MS = cfg.fleet.maxWallMs;
@@ -57,6 +59,12 @@ Worker discipline:
 ${TURN_ECONOMY}`;
 
 export interface Worker {
+  /**
+   * Stable, URL-safe id for the life of the worker (`w-<n>`) — the key the
+   * tiny endpoint's per-worker routes use (CREW.md). Names are the game's
+   * handle and can be re-used across hires; the id never is.
+   */
+  id: string;
   name: string;
   task: string;
   status: 'connecting' | 'working' | 'done' | 'failed' | 'dismissed' | 'interrupted';
@@ -65,6 +73,8 @@ export interface Worker {
   /** when it stopped working (any terminal status) — the clock the crew strip
    *  ages a finished card by, so a fresh result is visible and a stale one isn't. */
   endedAt?: number;
+  /** when the last step landed — `workerState` reads a long silence as 'stalled'. */
+  progressAt?: number;
   journal: string[];
   result?: string;
   /** Instructions queued by the primary agent, delivered before the next step. */
@@ -123,6 +133,10 @@ export class Fleet {
   onProgress?: (w: Worker, line: string) => void;
   /** The primary's Model — every hire drives the same provider/quota (set by main(); tests leave it unset → Bedrock default). */
   model?: Model;
+  /** Next `w-<n>` — seeded past every id the ledger already holds. */
+  private counter = 1;
+  /** A worker whose body just died or was retired — the camera closes its page. */
+  onReleased?: (w: Worker) => void;
 
   constructor() {
     // Cap 0: any retirement that left a socket open is over budget by
@@ -136,12 +150,17 @@ export class Fleet {
     // Hires the previous process died holding become INTERRUPTED — their
     // bodies are gone (kicked when the socket died), but the record of who
     // was doing what lets the boss re-hire with the journal as a head start.
-    for (const w of loadFile()) {
+    const loaded = loadFile();
+    this.counter = nextWorkerCounter(loaded.map((w) => w.id));
+    for (const w of loaded) {
       if (w.status === 'connecting' || w.status === 'working') {
         w.status = 'interrupted';
         w.result = w.result ?? `Process died while this worker was on the task (${w.steps} step(s) in).`;
       }
-      this.workers.set(w.name, { ...w, inbox: [], body: undefined });
+      // Ledgers written before ids existed get one now, so every row the
+      // dashboard shows is addressable.
+      const id = w.id ?? workerId(this.counter++);
+      this.workers.set(w.name, { ...w, id, inbox: [], body: undefined });
     }
     this.prune();
     if (this.interrupted.length) this.persist();
@@ -214,6 +233,26 @@ export class Fleet {
     return [...this.workers.values()];
   }
 
+  /** The worker behind a contract id, if the ledger still has it. */
+  byId(id: string): Worker | undefined {
+    for (const w of this.workers.values()) if (w.id === id) return w;
+    return undefined;
+  }
+
+  /**
+   * Reflex-level STOP for one worker: legs, controls, dig — no model turn, no
+   * dismissal (the task loop keeps going; its next step sees a body that is
+   * standing still). Returns what it stopped, [] for a worker with no body.
+   */
+  stop(id: string): string[] | undefined {
+    const w = this.byId(id);
+    if (!w) return undefined;
+    if (!w.body) return [];
+    const stopped = stopBody(w.body.bot);
+    w.inbox.push('🛑 The boss (via tiny) hit STOP: your legs, controls and dig were halted. Reassess before moving again.');
+    return stopped;
+  }
+
   get active(): number {
     return this.list().filter((w) => w.status === 'connecting' || w.status === 'working').length;
   }
@@ -230,7 +269,7 @@ export class Fleet {
     if (this.isNameTaken?.(clean)) {
       throw new Error(`"${clean}" is already on the server (a player or the primary bot) — hiring would collide with their login. Pick a different name.`);
     }
-    const w: Worker = { name: clean, task, status: 'connecting', steps: 0, startedAt: Date.now(), journal: [], inbox: [] };
+    const w: Worker = { id: workerId(this.counter++), name: clean, task, status: 'connecting', steps: 0, startedAt: Date.now(), journal: [], inbox: [] };
     this.workers.set(clean, w);
     this.persist();
     // Not `void`: an unhandled rejection kills the process in Node 22, and the
@@ -279,6 +318,9 @@ export class Fleet {
    */
   private release(w: Worker) {
     const bot = w.body?.bot as unknown as SocketBearing | undefined;
+    // The camera first: its viewer holds listeners on this very bot and a
+    // page in the shared Chrome — both must go before the world is emptied.
+    try { if (w.body) this.onReleased?.(w); } catch { /* a camera that refuses to close is logged by its owner */ }
     try { w.body?.retire(); } catch { /* already gone */ }
     // Then make the PLUGINS let go. A heap snapshot of a live probe finally
     // named this issue's last retainer, and it was not one of our collections:
@@ -458,6 +500,7 @@ export class Fleet {
           stepInFlight = false;
           const line = answer.replace(DONE, '').trim().slice(0, 300);
           w.journal.push(line);
+          w.progressAt = Date.now();
           this.persist(); // each step lands on disk — a crash loses nothing
           this.onProgress?.(w, line);
           if (answer.includes(DONE)) {
@@ -609,6 +652,8 @@ export function fleetTools(fleet: Fleet) {
  * then fall off.
  */
 export interface CrewCard {
+  /** contract id (`w-<n>`) — what the per-worker routes take */
+  id: string;
   name: string;
   status: Worker['status'];
   steps: number;
@@ -637,6 +682,7 @@ export function crewSnapshot(
       return now - (w.endedAt ?? w.startedAt) <= terminalMs;
     })
     .map((w) => ({
+      id: w.id,
       name: w.name,
       status: w.status,
       steps: w.steps,

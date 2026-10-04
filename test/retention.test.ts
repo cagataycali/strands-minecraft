@@ -29,7 +29,7 @@ const reaches = (root: unknown, target: object): boolean => {
 const body = () => ({ world: { columns: { 'a,b': {} } }, entities: { 1: {} } });
 
 const worker = (over: Partial<Worker> = {}): Worker => ({
-  name: 'Chopper', task: 'chop 3 logs', status: 'done', steps: 1,
+  id: 'w-1', name: 'Chopper', task: 'chop 3 logs', status: 'done', steps: 1,
   startedAt: 1_000, endedAt: 2_000, journal: ['step 1: chopped'],
   inbox: ['⚔️ took damage'], ...over,
 });

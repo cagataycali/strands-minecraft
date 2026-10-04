@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { crewSnapshot, overflowNames, stripHeavy, type Worker } from '../src/fleet.js';
 
 const w = (over: Partial<Worker>): Worker => ({
-  name: 'W', task: 'do a thing', status: 'working', steps: 1,
+  id: 'w-1', name: 'W', task: 'do a thing', status: 'working', steps: 1,
   startedAt: Date.now(), journal: ['step 1: did a thing'], inbox: [], ...over,
 });
 
@@ -52,7 +52,7 @@ test('crewSnapshot: the staleness window is a knob, and its edge includes', () =
 
 // ── a finished worker's report must survive its body (live soak 2026-08-17) ──
 const ledgerWorker = (over: Partial<Worker>): Worker => ({
-  name: 'W', task: 't', status: 'working', steps: 1,
+  id: 'w-1', name: 'W', task: 't', status: 'working', steps: 1,
   startedAt: NOW - 60_000, journal: [], inbox: [], ...over,
 });
 

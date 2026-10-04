@@ -72,6 +72,8 @@ export const cfg = {
     cooldownMs: num('FLEET_COOLDOWN_MS', 2_000),
     /** FLEET_KEEP — finished-worker records kept on disk. */
     keep: num('FLEET_KEEP', 20),
+    /** FLEET_MAX_WORKERS — ADVISORY headcount for /api/health.workers.max and the dashboard's hire chip (the fleet itself has no hard cap). */
+    maxWorkers: num('FLEET_MAX_WORKERS', 6),
     /**
      * FLEET_WORKER_VIEW_DISTANCE — how much WORLD a worker is allowed to load,
      * in chunks (a mineflayer name like 'tiny' or 'short' also works).

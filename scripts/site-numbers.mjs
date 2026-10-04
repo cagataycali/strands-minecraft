@@ -99,9 +99,22 @@ const TINY = new Set([
   'GET /api/health', 'GET /api/telemetry', 'GET /api/camera/snapshot', 'GET /api/stream.mjpeg',
   'GET /api/events', 'POST /api/chat', 'POST /api/stop',
 ]);
-const routeTable = routes
-  .filter((r) => TINY.has(r))
-  .map((r) => ({ route: r, gate: PUBLIC.has(r) ? 'public' : 'token' }));
+// The worker family (CREW.md) is matched by src/web/crew.ts matchWorkerRoute, not by
+// string equality — list it here and prove each leaf still exists in that matcher.
+const crewSrc = read('src/web/crew.ts');
+const WORKER_ROUTES = [
+  ['GET /api/workers', "'/api/workers'"], ['POST /api/workers', "'POST'"],
+  ['GET /api/workers/:id/telemetry', 'telemetry'], ['GET /api/workers/:id/camera/snapshot', 'camera\\/snapshot'],
+  ['GET /api/workers/:id/stream.mjpeg', 'stream\\.mjpeg'], ['POST /api/workers/:id/stop', 'stop'],
+  ['DELETE /api/workers/:id', "'DELETE'"],
+];
+for (const [r, needle] of WORKER_ROUTES) {
+  if (!crewSrc.includes(needle)) throw new Error(`site-numbers: ${r} — '${needle}' no longer in src/web/crew.ts matchWorkerRoute`);
+}
+const routeTable = [
+  ...routes.filter((r) => TINY.has(r)),
+  ...WORKER_ROUTES.map(([r]) => r),
+].map((r) => ({ route: r, gate: PUBLIC.has(r) ? 'public' : 'token' }));
 
 // --- rails: README's rail table (7 rows) — counted, not typed ----------------------
 const readme = read('README.md');

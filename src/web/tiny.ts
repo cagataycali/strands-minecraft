@@ -108,7 +108,8 @@ export interface TelemetryExtras {
   /** What the mind is doing — from the same work() snapshot /api/state shows. */
   task?: { kind: 'idle' | 'turn' | 'journey' | 'fleet'; text: string; since_s: number };
   thinker?: { enabled: boolean; next_in_s: number | null };
-  crew?: Array<{ name: string; job: string; alive: boolean }>;
+  /** CREW.md: `id` + `goal` are additive (goal === job; the contract word is goal). */
+  crew?: Array<{ name: string; job: string; alive: boolean; id?: string; goal?: string }>;
   connection?: { connected: boolean; epoch: number; reconnects: number };
   mem?: { heapMb: number; limitMb: number | null };
 }
