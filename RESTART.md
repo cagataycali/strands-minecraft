@@ -20,10 +20,10 @@ The image copies `src/` only — the fonts the page needs now live in
 
 ```sh
 cd ~/strands-minecraft && git pull --ff-only
-pkill -f "tsx src/index.ts"         # StrandsBot (:3008) and Frend — both restart below
-nohup npx tsx src/index.ts > /tmp/strandsbot.log 2>&1 &
-# Frend, if he was up:
-# nohup env $(cat instances/Frend.env | xargs) npx tsx src/index.ts > /tmp/frend.log 2>&1 &
+npx strands-minecraft ls                                  # pids + ports of every instance
+pkill -f "tsx src/index.ts"                               # StrandsBot (:3008) and Frend (:3208) both stop
+nohup npx tsx src/index.ts > /tmp/strandsbot.log 2>&1 &   # StrandsBot
+npx strands-minecraft start Frend                         # Frend, from instances/Frend.env (logs/Frend.log)
 ```
 
 ## Check
