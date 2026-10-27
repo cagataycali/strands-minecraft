@@ -33,6 +33,7 @@ import { stopBody } from './web/stop.js';
 export { stopBody };
 import { WARMING_JPEG, WARMING_PULSE_MS, mjpegPart } from './web/warming-frame.js';
 import { PAGE_HTML } from './web/page.js';
+import { serveStatic } from './web/assets.js';
 import { WebSocketTransport, transportFactories, type TransportFactories } from './realtime/transport.js';
 import { cfg } from './config.js';
 import { botCreateOptions } from './bot.js';
@@ -779,6 +780,7 @@ export function startWeb(
         return res.end(PAGE_HTML);
       }
       if (route === 'GET /favicon.ico') { res.writeHead(204); return res.end(); } // guarded 401 here just scares the console
+      if (req.method === 'GET' && serveStatic(url.pathname, res)) return; // /fonts/* — open, immutable
       if (route === 'GET /manifest.webmanifest') {
         res.writeHead(200, { 'Content-Type': 'application/manifest+json', 'Cache-Control': 'max-age=3600' });
         return res.end(MANIFEST);
