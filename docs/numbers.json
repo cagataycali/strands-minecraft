@@ -1,6 +1,6 @@
 {
   "generated_by": "scripts/site-numbers.mjs",
-  "commit": "5b1f6cc",
+  "commit": "b3799f8",
   "version": "0.1.0",
   "node": ">=22",
   "license": "MIT",

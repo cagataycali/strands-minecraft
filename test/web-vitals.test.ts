@@ -5,7 +5,9 @@ import { PAGE_HTML as page } from '../src/web/page.js';
 import { readFileSync } from 'node:fs';
 
 // The tiny fixture is the wire truth for /api/telemetry — the panel must read it.
-const fixture = JSON.parse(readFileSync(process.env.HOME + '/tinyai-id/tests/fixtures/minecraft-body.json', 'utf8'));
+// test/fixtures/minecraft-body.json is a copy of tinyai-id/tests/fixtures/minecraft-body.json
+// (that repo owns it; CI has no ~/tinyai-id, which kept main red since 2026-10-04).
+const fixture = JSON.parse(readFileSync(new URL('./fixtures/minecraft-body.json', import.meta.url), 'utf8'));
 const telemetry = fixture.cases.telemetryLive.body;
 const disconnected = fixture.cases.telemetryDisconnected.body;
 

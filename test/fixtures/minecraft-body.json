@@ -1,0 +1,919 @@
+{
+  "_about": "READ-ONLY truth for the strands-minecraft body (StrandsBot) on web + iOS (+Android). Written by LANE MINECRAFT-BODY 2026-09-22 07:0xZ from LIVE captures of the running bot (docker strands-bot, strands-minecraft main ec728be+, routes in src/web.ts + src/web/tiny.ts). Every `cases.*.body` below is a real response except telemetryDisconnected/healthDisconnected (shapeTelemetry's null rules — capturing it would mean kicking the bot) and tunnelDown (the real Cloudflare 530 of the moment). Consumers: lib/devices/minecraft.ts (web decoders, vitest), ios/Tiny/Sources/MinecraftCore.swift (MinecraftCoreTests), later Android MinecraftCore.kt.",
+  "origin": "https://minecraft.cagatay.my",
+  "body": {
+    "slug": "strands-the-miner",
+    "platform": "strands-minecraft",
+    "title": "Strands the miner",
+    "inGameName": "StrandsBot",
+    "deviceName": "strandsbot",
+    "capability": "body:strands-the-miner",
+    "capabilities": [
+      "body:strands-the-miner",
+      "chat",
+      "telemetry",
+      "camera",
+      "stream",
+      "stop",
+      "minecraft"
+    ],
+    "matchCapabilities": [
+      "minecraft"
+    ],
+    "tokenKey": "body.minecraft.token",
+    "glyph": "cube",
+    "role": "A Minecraft bot that is a real agent — perceives, acts, remembers, survives being kicked; you talk, it fells the spruce.",
+    "board": "mineflayer + Strands SDK in Docker",
+    "repo": "strands-minecraft",
+    "note": "BodyManager.pick: kind endpoint + https url + (platform == strands-minecraft OR capabilities contain body:strands-the-miner OR minecraft). tiny-tech's enroll writes body:<fleet slug> first (registry.ts bodyCapabilities) and platform = 'strands-minecraft'; the body rides in capabilities, never in kind.",
+    "capabilitiesCrew": [
+      "workers"
+    ]
+  },
+  "auth": {
+    "scheme": "Bearer <TINY_TOKEN>",
+    "header": "Authorization",
+    "alsoAccepts": [
+      "?token= query (MJPEG <img>)",
+      "cookie mc_session (passkey SPA)"
+    ],
+    "open": [
+      "/",
+      "/api/health",
+      "/auth/*",
+      "/manifest.webmanifest",
+      "/icon-*.png"
+    ],
+    "gatedPrefix": "/api/",
+    "refusal": {
+      "status": 401,
+      "body": {
+        "ok": false,
+        "error": "authentication required"
+      }
+    },
+    "rateLimit": {
+      "status": 429,
+      "body": {
+        "ok": false,
+        "error": "rate limited — 5 writes per second per token"
+      },
+      "header": {
+        "Retry-After": "1"
+      },
+      "rule": "5 writes (POST) per second per token; reads never limited"
+    },
+    "secret": "env TINY_TOKEN (≥32 chars, openssl rand -hex 32) in the compose .env; the tiny device row's `secret` holds the same value; iOS reads it via GET /api/devices/<id>/credential or the owner pastes it.",
+    "source": "src/web/tiny.ts tinyToken/presentedToken/tokenMatches/createRateLimiter; src/web.ts guarded section (`const presented = presentedToken(req.headers, url)`); src/web/auth.ts:110 authBypassed (loopback dev bypass never applies through the tunnel or from the docker bridge)"
+  },
+  "routes": {
+    "health": {
+      "method": "GET",
+      "path": "/api/health",
+      "auth": false,
+      "source": "src/web.ts `route === 'GET /api/health'`"
+    },
+    "telemetry": {
+      "method": "GET",
+      "path": "/api/telemetry",
+      "auth": true,
+      "source": "src/web.ts → shapeTelemetry (src/web/tiny.ts) + index.ts tiny.telemetry closure (task/thinker/crew/connection/mem)"
+    },
+    "snapshot": {
+      "method": "GET",
+      "path": "/api/camera/snapshot",
+      "auth": true,
+      "contentType": "image/jpeg",
+      "headers": {
+        "X-Camera": "live | warming | broken: <why>"
+      },
+      "note": "one JPEG 960×540 q60 from the SAME headless page capture_view uses; a fresh MJPEG-loop frame (<1.5 s) is served as-is; while Chrome launches (>8 s) the WARMING placeholder JPEG with X-Camera: warming — never a 404/503. Same path the worker's ENDPOINT_ACTIONS.snapshot uses.",
+      "source": "src/web.ts `route === 'GET /api/camera/snapshot'`; src/tools/vision.ts getCameraPage/chromeGlArgs"
+    },
+    "stream": {
+      "method": "GET",
+      "path": "/api/stream.mjpeg",
+      "auth": true,
+      "contentType": "multipart/x-mixed-replace; boundary=frame",
+      "note": "alias of /stream.mjpeg; ~3 fps (WEB_FRAME_MS=350); use ?token= from an <img>",
+      "source": "src/web.ts `route === 'GET /stream.mjpeg' || route === 'GET /api/stream.mjpeg'`"
+    },
+    "events": {
+      "method": "GET",
+      "path": "/api/events",
+      "auth": true,
+      "contentType": "text/event-stream",
+      "note": "alias of /events; replays the last 100 feed events then streams; line = `data: <FeedEvent>`; FeedEvent {ts, kind: in|out|journey|thought|worker|chat|system|voice, who, text ≤2000, replyTo?}; an `out` with replyTo=<turn_id> is THE answer to that /api/chat turn",
+      "source": "src/web.ts FeedEvent, `route === 'GET /events' || route === 'GET /api/events'`"
+    },
+    "chat": {
+      "method": "POST",
+      "path": "/api/chat",
+      "auth": true,
+      "body": {
+        "prompt": "string (the relay) — or text (SPA); trimmed, ≤2000",
+        "wait_s": "number, default 20, max 40"
+      },
+      "reply": "{ok, reply, turn_id: 'say-N', done, elapsed_s, task} — done:false = still running, follow /api/events replyTo=turn_id; ok:false + error = the turn failed",
+      "note": "same rail as POST /api/say (session.ask, one say id, one receipt); the relay (chatgpt-plugin-tinyai ENDPOINT_ACTIONS.chat) POSTs {prompt} and wraps the JSON as {ok:true, result}",
+      "source": "src/web.ts `route === 'POST /api/chat'`; src/web/tiny.ts chatPrompt/chatWaitMs; src/index.ts run()"
+    },
+    "stop": {
+      "method": "POST",
+      "path": "/api/stop",
+      "auth": true,
+      "reply": "{ok, stopped:[pathfinder|controls|digging|journey <id>], note}",
+      "note": "pathfinder.stop+setGoal(null)+clearControlStates (tools/movement.ts stop_moving), stopDigging when a dig is in flight, journeys.stop(running) — cannot abort a model turn mid-thought (Session has no abort); the note says so",
+      "source": "src/web.ts stopBody + `route === 'POST /api/stop'`; src/index.ts tiny.stop"
+    },
+    "say": {
+      "method": "POST",
+      "path": "/api/say",
+      "auth": true,
+      "note": "unchanged browser route: 202 {ok, id}, answer only on the feed"
+    },
+    "workers": {
+      "method": "GET",
+      "path": "/api/workers",
+      "auth": true,
+      "source": "src/web.ts matchWorkerRoute (src/web/crew.ts) → rowOf/workerRow",
+      "note": "CREW.md contract (lane B 2026-10-04): every manage_bots worker as a BODY. ids `w-<n>` are stable for the worker's life and never re-used after a restart; state working|idle|stalled|dead (stalled = no step for 3 min); camera.frames/watchers additive."
+    },
+    "workerTelemetry": {
+      "method": "GET",
+      "path": "/api/workers/{id}/telemetry",
+      "auth": true,
+      "source": "src/web.ts → shapeTelemetry of the WORKER's bot + `worker` row",
+      "note": "same shape as /api/telemetry (task.kind='fleet', crew=[]); 404 {ok:false,error:'no worker <id>'} once pruned"
+    },
+    "workerSnapshot": {
+      "method": "GET",
+      "path": "/api/workers/{id}/camera/snapshot",
+      "auth": true,
+      "contentType": "image/jpeg",
+      "headers": {
+        "X-Camera": "live | warming | broken: <why>"
+      },
+      "note": "the worker's OWN prismarine-viewer (next free port above VIEWER_PORT) rendered in a page of the SAME headless Chrome; never 404 while alive (dead → 200 placeholder, `X-Camera: broken: worker <status> - no body`); near-field: workers load viewDistance 3"
+    },
+    "workerStream": {
+      "method": "GET",
+      "path": "/api/workers/{id}/stream.mjpeg",
+      "auth": true,
+      "contentType": "multipart/x-mixed-replace; boundary=frame",
+      "note": "~3 fps, frames only while a watcher is attached; 410 once the worker is dead. NOT proxied by the tiny worker (infinite body) — web polls the snapshot."
+    },
+    "workerStop": {
+      "method": "POST",
+      "path": "/api/workers/{id}/stop",
+      "auth": true,
+      "rate": "5 writes/s per token",
+      "note": "reflex-level: pathfinder, controls, dig of ONE worker; no model turn; the worker keeps its task and gets a 🛑 inbox note"
+    },
+    "workerHire": {
+      "method": "POST",
+      "path": "/api/workers",
+      "auth": true,
+      "body": {
+        "goal": "string (or task)",
+        "name": "string? letters/digits/underscore ≤16; default Crew<n>"
+      },
+      "note": "= manage_bots hire → 201 {ok, worker:row}; 400 goal required; 409 live duplicate name"
+    },
+    "workerRetire": {
+      "method": "DELETE",
+      "path": "/api/workers/{id}",
+      "auth": true,
+      "note": "= manage_bots dismiss → 200 {ok, worker:row(state dead)}; 404 unknown id"
+    }
+  },
+  "cases": {
+    "health": {
+      "status": 200,
+      "body": {
+        "ok": true,
+        "body": "strands-minecraft",
+        "name": "StrandsBot",
+        "mc": {
+          "host": "host.docker.internal",
+          "port": 25565,
+          "version": "1.21.11",
+          "connected": true,
+          "epoch": 0
+        },
+        "camera": {
+          "ok": true,
+          "why": "idle (no watchers; 2 frames served so far)"
+        },
+        "auth": {
+          "passkeys": false,
+          "tiny_token": true
+        },
+        "uptime_s": 130
+      },
+      "expect": {
+        "dashboardUp": true,
+        "robotPresent": true,
+        "tinyTokenConfigured": true
+      }
+    },
+    "healthDisconnected": {
+      "status": 200,
+      "body": {
+        "ok": true,
+        "body": "strands-minecraft",
+        "name": "StrandsBot",
+        "mc": {
+          "host": "host.docker.internal",
+          "port": 25565,
+          "version": "1.21.11",
+          "connected": false,
+          "epoch": 1
+        },
+        "camera": {
+          "ok": true,
+          "why": "idle (no watchers; 2 frames served so far)"
+        },
+        "auth": {
+          "passkeys": false,
+          "tiny_token": true
+        },
+        "uptime_s": 130
+      },
+      "expect": {
+        "dashboardUp": true,
+        "robotPresent": false,
+        "badge": "dashboard up, bot not in the world"
+      }
+    },
+    "telemetryLive": {
+      "status": 200,
+      "body": {
+        "name": "StrandsBot",
+        "dimension": "overworld",
+        "gamemode": "creative",
+        "pos": {
+          "x": 11.5,
+          "y": 75,
+          "z": 4.3
+        },
+        "yaw": -2.71,
+        "pitch": -0.6,
+        "health": 20,
+        "food": 20,
+        "air": 27,
+        "xp": 0,
+        "time": {
+          "day": 1,
+          "ticks": 7399,
+          "isDay": true
+        },
+        "weather": "clear",
+        "biome": "",
+        "held": "torch x64",
+        "inventory": [
+          {
+            "name": "torch",
+            "count": 64
+          },
+          {
+            "name": "cobblestone",
+            "count": 64
+          },
+          {
+            "name": "cooked_beef",
+            "count": 16
+          },
+          {
+            "name": "diamond_pickaxe",
+            "count": 1
+          }
+        ],
+        "nearby": {
+          "players": [
+            {
+              "name": "CagatayCali",
+              "dist": 13.1
+            }
+          ],
+          "hostiles": []
+        },
+        "task": {
+          "kind": "turn",
+          "text": "1 turn(s) in flight",
+          "since_s": 0
+        },
+        "thinker": {
+          "enabled": true,
+          "next_in_s": 79
+        },
+        "crew": [],
+        "connection": {
+          "connected": true,
+          "epoch": 0,
+          "reconnects": 0
+        },
+        "mem": {
+          "heapMb": 133,
+          "limitMb": 2096
+        },
+        "ts": 1790060588947
+      },
+      "expect": {
+        "present": true,
+        "hp": 20,
+        "food": 20,
+        "gamemode": "creative",
+        "posLabel": "12, 75, 4",
+        "inventoryTop": "torch",
+        "players": [
+          "CagatayCali"
+        ],
+        "hostiles": [],
+        "taskKind": "turn"
+      }
+    },
+    "telemetryDisconnected": {
+      "status": 200,
+      "body": {
+        "name": "StrandsBot",
+        "dimension": null,
+        "gamemode": null,
+        "pos": null,
+        "yaw": null,
+        "pitch": null,
+        "health": null,
+        "food": null,
+        "air": null,
+        "xp": null,
+        "time": null,
+        "weather": null,
+        "biome": null,
+        "held": null,
+        "inventory": [],
+        "nearby": {
+          "players": [],
+          "hostiles": []
+        },
+        "task": {
+          "kind": "idle",
+          "text": "",
+          "since_s": 0
+        },
+        "thinker": {
+          "enabled": true,
+          "next_in_s": 79
+        },
+        "crew": [],
+        "connection": {
+          "connected": false,
+          "epoch": 1,
+          "reconnects": 0
+        },
+        "mem": {
+          "heapMb": 133,
+          "limitMb": 2096
+        },
+        "ts": 1790060648947
+      },
+      "expect": {
+        "present": false,
+        "hp": null,
+        "posLabel": "—",
+        "taskKind": "idle"
+      },
+      "note": "synthesised from shapeTelemetry's null rules (src/web/tiny.ts: entity undefined → pos/yaw/pitch/health/food/air/held null, nearby empty, connection.connected false)"
+    },
+    "snapshotWarming": {
+      "status": 200,
+      "headers": {
+        "Content-Type": "image/jpeg",
+        "X-Camera": "warming"
+      },
+      "bytes": 1773,
+      "note": "first call after boot: Chrome launching (measured 31 s cold) — the WARMING placeholder; the phone keeps polling"
+    },
+    "snapshotLive": {
+      "status": 200,
+      "headers": {
+        "Content-Type": "image/jpeg",
+        "X-Camera": "live"
+      },
+      "bytes": 83682,
+      "note": "960×540 q60; shots/snapshot-gl-2.jpg — the owner flying above the canopy"
+    },
+    "chatSee": {
+      "status": 200,
+      "request": {
+        "prompt": "what do you see? one sentence, no tools except capture_view/look_around",
+        "wait_s": 40
+      },
+      "body": {
+        "ok": true,
+        "reply": "I'm perched high in a leafy canopy looking down at a cluster of blue prismarine-ish blocks, crafting tables, and lit lanterns on a grassy patch below — all wrapped in dense oak leaves, which is probably exactly what's got me wedged up here.",
+        "turn_id": "say-1",
+        "done": true,
+        "elapsed_s": 11,
+        "task": {
+          "kind": "turn",
+          "text": "1 turn(s) in flight",
+          "since_s": 0
+        }
+      },
+      "expect": {
+        "done": true,
+        "turnId": "say-1",
+        "replyShown": "I'm perched high in a leafy canopy looking down at a cluster of blue prismarine-ish blocks, crafting tables, and lit lanterns on a grassy patch below — all wrapped in dense oak leaves, which is probably exactly what's got me wedged up here."
+      }
+    },
+    "chatLong": {
+      "status": 200,
+      "request": {
+        "prompt": "cut a tree and tell me what you got",
+        "wait_s": 20
+      },
+      "body": {
+        "ok": true,
+        "reply": "On it — \"look around carefully and describe the nearest tree in two sentences (do not …\" is running as turn say-2 (0s so far). I keep working after this reply; the answer lands on /api/events tagged replyTo=say-2. Right now: 2 turn(s) in flight",
+        "turn_id": "say-2",
+        "done": false,
+        "elapsed_s": 0,
+        "task": {
+          "kind": "turn",
+          "text": "2 turn(s) in flight",
+          "since_s": 0
+        }
+      },
+      "expect": {
+        "done": false,
+        "turnId": "say-2",
+        "followEvents": true,
+        "replyShown": "On it — \"look around carefully and describe the nearest tree in two sentences (do not …\" is running as turn say-2 (0s so far). I keep working after this reply; the answer lands on /api/events tagged replyTo=say-2. Right now: 2 turn(s) in flight"
+      },
+      "note": "the done:false SHAPE, captured live with wait_s:0 on a look-only prompt (the owner had not yet approved touching the world); a cut-a-tree turn answers exactly this way past wait_s and finishes on /api/events"
+    },
+    "chatFailed": {
+      "status": 200,
+      "body": {
+        "ok": false,
+        "error": "the turn died",
+        "turn_id": "say-3",
+        "done": true,
+        "task": {
+          "kind": "idle",
+          "text": "",
+          "since_s": 0
+        }
+      },
+      "expect": {
+        "done": true,
+        "errorShown": "the turn died"
+      },
+      "note": "from test/tiny-endpoint.test.ts (a rail that throws) — ok:false is a FAILED turn, not a transport error"
+    },
+    "chatEmpty": {
+      "status": 400,
+      "body": {
+        "ok": false,
+        "error": "prompt required"
+      }
+    },
+    "stop": {
+      "status": 200,
+      "body": {
+        "ok": true,
+        "stopped": [
+          "pathfinder",
+          "controls"
+        ],
+        "note": "a model turn in flight finishes its current step; movement, digging and the journey are halted"
+      },
+      "expect": {
+        "stopped": [
+          "pathfinder",
+          "controls"
+        ]
+      }
+    },
+    "eventsIn": {
+      "line": {
+        "ts": 1790060610810,
+        "kind": "in",
+        "who": "you",
+        "text": "(from CagatayCali via the web dashboard) look around carefully and describe the nearest tree in two sentences (do not move, do not dig)",
+        "replyTo": "say-2"
+      },
+      "note": "the `in` for a /api/chat turn carries replyTo=turn_id; who='you' (web rail) — the dashboard prefix '(from CagatayCali via the web dashboard) ' is index.ts:244's"
+    },
+    "eventsSystem": {
+      "line": {
+        "ts": 1790060610810,
+        "kind": "system",
+        "who": "web",
+        "text": "say-2 queued: \"look around carefully and describe the nearest tree in tw…\""
+      },
+      "note": "say receipts are kind:system who:web"
+    },
+    "eventsOut": {
+      "line": {
+        "ts": 1790060480000,
+        "kind": "out",
+        "who": "StrandsBot",
+        "text": "I'm perched high in a leafy canopy looking down at a cluster of blue prismarine-ish blocks, crafting tables, and lit lanterns on a grassy patch below — all wrapped in dense oak leaves, which is probably exactly what's got me wedged up here.",
+        "replyTo": "say-1"
+      },
+      "note": "THE answer to a turn: kind out + replyTo=turn_id (test-pinned shape; text = chatSee.reply)"
+    },
+    "unauthorized": {
+      "status": 401,
+      "body": {
+        "ok": false,
+        "error": "authentication required"
+      },
+      "appliesTo": [
+        "/api/telemetry",
+        "/api/camera/snapshot",
+        "/api/stream.mjpeg",
+        "/api/events",
+        "/api/chat",
+        "/api/stop",
+        "/api/state"
+      ]
+    },
+    "rateLimited": {
+      "status": 429,
+      "headers": {
+        "Retry-After": "1"
+      },
+      "body": {
+        "ok": false,
+        "error": "rate limited — 5 writes per second per token"
+      }
+    },
+    "tunnelDown": {
+      "status": 530,
+      "contentType": "text/plain; charset=UTF-8",
+      "body": "error code: 1033",
+      "expect": {
+        "rowStatus": "originDown"
+      },
+      "note": "Cloudflare 530/1033 = tunnel route exists, no connector — the row stays enrolled, online:null, badge 'waiting for minecraft.cagatay.my'"
+    },
+    "relayWrapped": {
+      "note": "what use_device/tiny gets back from the worker for action=chat: {ok:true, result:<the /api/chat JSON above>}; 502 unreachable / 504 'did not finish within 90s' / 502 unauthorized:true on a 401 (chatgpt-plugin-tinyai src/devices.ts)"
+    },
+    "workers": {
+      "status": 200,
+      "body": {
+        "ok": true,
+        "bot": "Ivy",
+        "workers": [
+          {
+            "id": "w-1",
+            "name": "Lookout",
+            "goal": "Stand exactly where you are and keep watch. Do not move, dig or chat. Report what you see in one sentence, then end with [TASK_DONE] only after 10 more steps.",
+            "state": "stalled",
+            "alive": true,
+            "pos": {
+              "x": -7.5,
+              "y": 70,
+              "z": 5.5
+            },
+            "health": 20,
+            "food": 20,
+            "since_s": 338,
+            "steps": 1,
+            "camera": {
+              "ok": true,
+              "why": "streaming to 1 watcher(s), 591 frames sent · near-field view (viewDistance 3)",
+              "frames": 591,
+              "watchers": 1
+            },
+            "status": "working",
+            "last": "Standing watch at (-8, 70, 5) on grass: night, no hostiles in range, only players Ivy (4 blocks north) and Crew2 (15 blocks north) nearby. Holding position — step 1 of 10 complete."
+          },
+          {
+            "id": "w-2",
+            "name": "Crew2",
+            "goal": "Stay put and keep watch over Ivy. Never move or dig. One sentence per step.",
+            "state": "stalled",
+            "alive": true,
+            "pos": {
+              "x": -30.7,
+              "y": 66,
+              "z": -9.5
+            },
+            "health": 18.2,
+            "food": 17,
+            "since_s": 337,
+            "steps": 1,
+            "camera": {
+              "ok": true,
+              "why": "idle (no watchers; 2 frames served so far) · near-field view (viewDistance 3)",
+              "frames": 2,
+              "watchers": 0
+            },
+            "status": "working",
+            "last": "Holding position at (-8, 69, -10): Ivy is 11 blocks south at (-8.5, 69, 1.5) with Lookout nearby, and no hostile mobs are in range — watch continues."
+          }
+        ]
+      },
+      "expect": {
+        "ids": [
+          "w-1",
+          "w-2"
+        ],
+        "states": [
+          "stalled",
+          "stalled"
+        ],
+        "pagerPages": 3,
+        "firstGoal": "Stand exactly where you are and keep wat"
+      },
+      "note": "LIVE capture 2026-10-04 from a third bot (Ivy :3208, PEER_BOTS=StrandsBot,Nova) with two workers hired through POST /api/workers"
+    },
+    "workersEmpty": {
+      "status": 200,
+      "body": {
+        "ok": true,
+        "bot": "StrandsBot",
+        "workers": []
+      },
+      "expect": {
+        "pagerPages": 1
+      }
+    },
+    "workerTelemetry": {
+      "status": 200,
+      "body": {
+        "name": "Lookout",
+        "dimension": "overworld",
+        "gamemode": "survival",
+        "pos": {
+          "x": -7.5,
+          "y": 70,
+          "z": 5.5
+        },
+        "yaw": 3.14,
+        "pitch": 0,
+        "health": 20,
+        "food": 20,
+        "air": 20,
+        "xp": 0,
+        "time": {
+          "day": 12,
+          "ticks": 1639,
+          "isDay": true
+        },
+        "weather": "clear",
+        "biome": "",
+        "held": null,
+        "inventory": [],
+        "nearby": {
+          "players": [
+            {
+              "name": "Ivy",
+              "dist": 4.2
+            },
+            {
+              "name": "Crew2",
+              "dist": 27.9
+            }
+          ],
+          "hostiles": [
+            {
+              "name": "drowned",
+              "dist": 24.3
+            }
+          ]
+        },
+        "task": {
+          "kind": "fleet",
+          "text": "Stand exactly where you are and keep watch. Do not move, dig or chat. Report what you see in one sentence, then end with [TASK_DONE] only after 10 more steps.",
+          "since_s": 338
+        },
+        "thinker": {
+          "enabled": false,
+          "next_in_s": null
+        },
+        "crew": [],
+        "connection": {
+          "connected": true,
+          "epoch": 0,
+          "reconnects": 0
+        },
+        "mem": {
+          "heapMb": 114,
+          "limitMb": null
+        },
+        "ts": 1791105555801,
+        "worker": {
+          "id": "w-1",
+          "name": "Lookout",
+          "goal": "Stand exactly where you are and keep watch. Do not move, dig or chat. Report what you see in one sentence, then end with [TASK_DONE] only after 10 more steps.",
+          "state": "stalled",
+          "alive": true,
+          "pos": {
+            "x": -7.5,
+            "y": 70,
+            "z": 5.5
+          },
+          "health": 20,
+          "food": 20,
+          "since_s": 338,
+          "steps": 1,
+          "camera": {
+            "ok": true,
+            "why": "streaming to 1 watcher(s), 591 frames sent · near-field view (viewDistance 3)",
+            "frames": 591,
+            "watchers": 1
+          },
+          "status": "working",
+          "last": "Standing watch at (-8, 70, 5) on grass: night, no hostiles in range, only players Ivy (4 blocks north) and Crew2 (15 blocks north) nearby. Holding position — step 1 of 10 complete."
+        }
+      },
+      "expect": {
+        "name": "Lookout",
+        "taskKind": "fleet",
+        "workerId": "w-1"
+      }
+    },
+    "workerStop": {
+      "status": 200,
+      "body": {
+        "ok": true,
+        "id": "w-1",
+        "stopped": [
+          "pathfinder",
+          "controls"
+        ],
+        "note": "reflex-level: legs, controls and dig halted; the worker keeps its task and reassesses on its next step"
+      },
+      "expect": {
+        "stopped": [
+          "pathfinder",
+          "controls"
+        ],
+        "id": "w-1"
+      }
+    },
+    "workerMissing": {
+      "status": 404,
+      "body": {
+        "ok": false,
+        "error": "no worker w-9"
+      }
+    },
+    "hireRejected": {
+      "status": 400,
+      "body": {
+        "ok": false,
+        "error": "goal required"
+      }
+    },
+    "healthWithWorkers": {
+      "status": 200,
+      "body": {
+        "ok": true,
+        "body": "strands-minecraft",
+        "name": "Ivy",
+        "mc": {
+          "host": "localhost",
+          "port": 25565,
+          "version": "1.21.11",
+          "connected": true,
+          "epoch": 0
+        },
+        "camera": {
+          "ok": true,
+          "why": "idle (never started — no watcher has connected yet)"
+        },
+        "auth": {
+          "passkeys": false,
+          "tiny_token": true
+        },
+        "uptime_s": 361,
+        "workers": {
+          "alive": 2,
+          "max": 6
+        }
+      },
+      "expect": {
+        "workersAlive": 2,
+        "workersMax": 6
+      },
+      "note": "health gains `workers:{alive,max}` (additive); FLEET_MAX_WORKERS is advisory"
+    },
+    "telemetryCrewRow": {
+      "note": "additive: /api/telemetry.crew rows carry id + goal next to name/job/alive; SSE `worker` events carry workerId",
+      "body": {
+        "crew": [
+          {
+            "id": "w-1",
+            "name": "Lookout",
+            "job": "Stand watch",
+            "goal": "Stand watch",
+            "alive": true
+          }
+        ],
+        "event": {
+          "ts": 1791105218045,
+          "kind": "worker",
+          "who": "Lookout #0",
+          "text": "joined the server",
+          "workerId": "w-1"
+        }
+      }
+    }
+  },
+  "ui": {
+    "readings": [
+      {
+        "key": "health",
+        "label": "HP",
+        "glyph": "♥",
+        "format": "{health}/20"
+      },
+      {
+        "key": "food",
+        "label": "Food",
+        "glyph": "🍖",
+        "format": "{food}/20"
+      },
+      {
+        "key": "pos",
+        "label": "Pos",
+        "format": "{x}, {y}, {z} (rounded)"
+      },
+      {
+        "key": "dimension",
+        "label": "Dim"
+      },
+      {
+        "key": "time",
+        "label": "Time",
+        "format": "day {day} · {isDay ? 'day' : 'night'}"
+      }
+    ],
+    "quickChips": [
+      "Cut a tree",
+      "Come to me",
+      "What do you see?",
+      "Stop"
+    ],
+    "chipPrompts": {
+      "Cut a tree": "cut a tree and tell me what you got",
+      "Come to me": "come to me",
+      "What do you see?": "what do you see?",
+      "Stop": "POST /api/stop"
+    },
+    "refusals": {
+      "noRow": "Not enrolled on this account.",
+      "noToken": "Needs the bot token (TINY_TOKEN). Open to paste it.",
+      "originDown": "waiting for minecraft.cagatay.my",
+      "botAway": "dashboard up, bot not in the world",
+      "unauthorized": "the bot rejected the token — paste a fresh TINY_TOKEN",
+      "rateLimited": "too fast — one command per second"
+    },
+    "presenceRule": "robotPresent = health.mc.connected === true (health.ok alone means only the dashboard is up)",
+    "gamemodeNote": "creative: a felled log drops nothing — the bot's 'what I got' answer will honestly say so; survival: logs land in inventory (telemetry.inventory)",
+    "pip": {
+      "defaultCorner": "bottomTrailing",
+      "stackOffset": "one card height when scout is also floating",
+      "identifiers": [
+        "body-pip-minecraft",
+        "body-pip-minecraft-stop",
+        "body-pip-minecraft-size",
+        "body-pip-minecraft-expand",
+        "body-pip-minecraft-close",
+        "body-pip-minecraft-badge",
+        "body-pip-minecraft-say"
+      ],
+      "halfControls": [
+        "Cut a tree",
+        "Come to me",
+        "What do you see?",
+        "Say",
+        "STOP"
+      ],
+      "full": "eyes (MJPEG ?token= or snapshot 3→1 fps) + readings + live mind feed (/api/events)",
+      "harness": "-ui-testing-minecraft live|offline|noToken"
+    },
+    "crewPager": {
+      "pages": "page 0 = the bot (today's card); pages 1..n = GET /api/workers rows in order",
+      "dots": true,
+      "poll": "GET /api/workers every 2 s while the card is open; thumbnails via /api/workers/{id}/camera/snapshot at 1 fps on the VISIBLE page only; MJPEG only when expanded (iOS/Android)",
+      "stop": "per page: page 0 → POST /api/stop, page n → POST /api/workers/{id}/stop",
+      "hire": "chip → POST /api/workers {goal} (one text field); greyed at health.workers.alive >= max",
+      "goalLine": "{name} · {state} · {goal}",
+      "deadPage": "a page whose row turned dead stays until the next poll drops it; the pager clamps to the last page"
+    }
+  },
+  "rowStatus": {
+    "noRow": "Not enrolled on this account.",
+    "noToken": "Needs the bot token. Open to paste it.",
+    "originDown": "waiting for minecraft.cagatay.my",
+    "botAway": "dashboard up, bot not in the world",
+    "live": "Live"
+  }
+}
