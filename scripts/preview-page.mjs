@@ -142,7 +142,7 @@ http.createServer((req, res) => {
   if (serveStatic && serveStatic(url.pathname, res)) return;
   if (route === 'GET /favicon.ico') { res.writeHead(204); return res.end(); }
   if (route === 'GET /manifest.webmanifest') return json(res, 200, { name: 'StrandsBot' });
-  if (route === 'GET /auth/status') return json(res, 200, url.searchParams.has('gate') ? { enabled: true, enrolled: true, authed: false } : { enabled: false, enrolled: true, authed: true });
+  if (route === 'GET /auth/status') return json(res, 200, process.env.GATE ? { enabled: true, enrolled: process.env.GATE !== 'new', authed: false } : { enabled: false, enrolled: true, authed: true });
   if (route.startsWith('POST /auth/')) return json(res, 200, { key: 'k', options: { challenge: 'AAAA', allowCredentials: [], user: { id: 'AAAA' } } });
   if (SCENARIO === 'unreachable' && url.pathname.startsWith('/api/')) { res.writeHead(503); return res.end(); }
   if (route === 'GET /api/state') { const s = state(); delete s._telemetry; return json(res, 200, s); }
@@ -176,4 +176,4 @@ http.createServer((req, res) => {
   }
   if (route === 'POST /api/stop') return json(res, 200, { ok: true, stopped: ['pathfinder', 'controls'], note: 'preview' });
   res.writeHead(404); res.end('not found: ' + route);
-}).listen(PORT, '127.0.0.1', () => console.log(`preview (${SCENARIO}) → http://127.0.0.1:${PORT}/   add ?gate=1 for the passkey gate`));
+}).listen(PORT, '127.0.0.1', () => console.log(`preview (${SCENARIO}) → http://127.0.0.1:${PORT}/   GATE=1 (or GATE=new) for the passkey gate`));

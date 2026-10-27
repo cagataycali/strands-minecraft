@@ -10,6 +10,7 @@
  *    scrolls under it; the composer sticks to the bottom above the keyboard.
  */
 import { veilFor } from './veil.js';
+import { BRAND_HTML } from './brand.js';
 import { stopReceipt, mcClock, vitalsModel, systemTone, inventoryModel, crewTitle, displayText, stageModel, workerStageState, thumbPlan } from './hud.js';
 
 export const PAGE_HTML = /* html */ `<!doctype html>
@@ -20,244 +21,399 @@ export const PAGE_HTML = /* html */ `<!doctype html>
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="StrandsBot">
-<meta name="theme-color" content="#0b0e14">
+<meta name="theme-color" content="#000000">
 <link rel="manifest" href="/manifest.webmanifest">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="icon" type="image/png" sizes="512x512" href="/icon-512.png">
+<link rel="preload" as="font" type="font/woff2" crossorigin href="/fonts/inter-latin.woff2">
+<link rel="preload" as="font" type="font/woff2" crossorigin href="/fonts/jetbrains-mono-latin.woff2">
 <title>StrandsBot · live</title>
+<script>
+// Scheme before paint: localStorage 'mc-scheme' (paper|dark), else the phone is
+// dark (the video is the hero) and the desktop follows the OS.
+(function () {
+  var s; try { s = localStorage['mc-scheme']; } catch (e) { s = null; }
+  if (s !== 'dark' && s !== 'paper') s = matchMedia('(max-width: 899px)').matches || matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'paper';
+  document.documentElement.dataset.scheme = s;
+  var m = document.querySelector('meta[name=theme-color]'); if (m) m.content = s === 'dark' ? '#000000' : '#ffffff';
+})();
+</script>
 <style>
-  :root { color-scheme: dark; }
+  /* Strands design language (expo-the-arm/dashboard styles.css, strands-labs/robots extra.css): white or black
+     surfaces, the Strands green, JetBrains Mono for labels and numbers over Inter text, 1px borders, 8px radius.
+     No glass, no blur, no shadows; the one gradient is the scrim under the HUD on the video. Minecraft rides on
+     top: pixel sprites (hearts, food, the frog), a 9-slot hotbar, an XP-bar progress line, 2px block borders on
+     slots and STOP — the one place radius is 0. */
+  @font-face { font-family: "Inter"; font-style: normal; font-weight: 100 900; font-display: swap; src: url("/fonts/inter-latin.woff2") format("woff2"); }
+  @font-face { font-family: "JetBrains Mono"; font-style: normal; font-weight: 100 800; font-display: swap; src: url("/fonts/jetbrains-mono-latin.woff2") format("woff2"); }
+  :root {
+    --sr-radius: 8px;
+    --sr-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+    --sr-sans: "Inter", -apple-system, system-ui, sans-serif;
+    --sr-black: #000000; --sr-charcoal-1: #28292a; --sr-charcoal-2: #3d3c3c;
+    --safe-top: env(safe-area-inset-top, 0px); --safe-bot: env(safe-area-inset-bottom, 0px); --safe-l: env(safe-area-inset-left, 0px); --safe-r: env(safe-area-inset-right, 0px);
+    --topbar-h: 3.4rem;
+    --sr-scheme: paper;
+    --sr-bg: #ffffff; --sr-fg: var(--sr-black);
+    --sr-accent: #007a3d; --sr-accent-bright: #02a435; --sr-accent-soft: rgba(2, 164, 53, 0.12); --sr-on-accent: #ffffff;
+    --sr-ink-2: var(--sr-charcoal-2); --sr-ink-3: #666464; --sr-muted: #767373;
+    --sr-rule: rgba(0, 0, 0, 0.15);
+    --sr-card-bg: #ffffff; --sr-card-border: var(--sr-black);
+    --sr-chip-bg: #f4f4f4; --sr-code-inline: #f4f4f4; --sr-kbd: #f4f4f4;
+    --sr-code-bg: #f6f8fa; --sr-code-fg: #24292e; --sr-term-head: #eaeef2;
+    --sr-pill-bg: #ffffff; --sr-pill-border: #999696;
+    --sr-surface-green: #e6f6e7;
+    --sr-viewer-bg: #f4f4f4; --sr-grid-major: #b6b6b6; --sr-grid-minor: #d9d9d9;
+    --sr-warn: #946e00; --sr-on-warn: #ffffff;
+    --sr-scrim: rgba(0, 0, 0, 0.35);
+    --sr-danger: #c62828; --sr-danger-soft: rgba(198, 40, 40, 0.12); --sr-on-danger: #ffffff; --sr-info: #2456c4;
+    /* minecraft flavour */
+    --mc-px: 2px; --mc-heart: #c62828; --mc-food: #9a5a1c; --mc-armor: #666464; --mc-slot-border: #999696;
+    color-scheme: light;
+  }
+  html[data-scheme="dark"] {
+    --sr-scheme: dark;
+    --sr-bg: var(--sr-black); --sr-fg: #ffffff;
+    --sr-accent: #00cc60; --sr-accent-bright: #00cc60; --sr-accent-soft: rgba(0, 204, 96, 0.14); --sr-on-accent: var(--sr-black);
+    --sr-ink-2: #b6b6b6; --sr-ink-3: #999696; --sr-muted: #999696;
+    --sr-rule: var(--sr-charcoal-1);
+    --sr-card-bg: var(--sr-black); --sr-card-border: #ffffff;
+    --sr-chip-bg: var(--sr-charcoal-1); --sr-code-inline: var(--sr-charcoal-2); --sr-kbd: var(--sr-charcoal-1);
+    --sr-code-bg: #24292e; --sr-code-fg: #e1e4e8; --sr-term-head: #2f363d;
+    --sr-pill-bg: var(--sr-charcoal-1); --sr-pill-border: var(--sr-charcoal-2);
+    --sr-surface-green: color-mix(in srgb, var(--sr-accent) 74%, #000);
+    --sr-viewer-bg: #111213; --sr-grid-major: #46505c; --sr-grid-minor: #303740;
+    --sr-warn: #f6bc00; --sr-on-warn: var(--sr-black);
+    --sr-scrim: rgba(0, 0, 0, 0.6);
+    --sr-danger: #ff5d5d; --sr-danger-soft: rgba(255, 93, 93, 0.16); --sr-on-danger: #140000; --sr-info: #7cb7ff;
+    --mc-heart: #ff5d5d; --mc-food: #d8882e; --mc-armor: #b6b6b6; --mc-slot-border: #3d3c3c;
+    color-scheme: dark;
+  }
   * { box-sizing: border-box; margin: 0; }
-  body { background:#0b0e14; color:#dce3ea; font:15px/1.45 -apple-system,system-ui,sans-serif;
-         display:flex; flex-direction:column; height:100dvh; }
-  /* The video IS the header: vitals live on it, tap toggles fullscreen. */
-  #stage { padding-top:env(safe-area-inset-top); background:#000; }
-  #view { position:relative; } /* the HUD and the veil anchor to the VIDEO, not the strip below it */
+  html { -webkit-text-size-adjust: 100%; }
+  body { background:var(--sr-bg); color:var(--sr-fg); font:14px/1.45 var(--sr-sans);
+         display:flex; flex-direction:column; height:100dvh; -webkit-tap-highlight-color:transparent; overscroll-behavior:none; }
+  button, input { font:inherit; color:inherit; }
+  button { cursor:pointer; background:none; border:0; padding:0; }
+  button:disabled { cursor:not-allowed; }
+  :focus-visible { outline:2px solid var(--sr-accent); outline-offset:2px; }
+  svg.frog, svg.wordmark { display:block; shape-rendering:crispEdges; }
+  img, .px { image-rendering:pixelated; }
+  /* topbar strip: the brand lockup, the live dot, scheme + menu */
+  #top { flex:none; display:flex; align-items:center; justify-content:space-between; gap:10px; min-height:var(--topbar-h);
+         padding:var(--safe-top) calc(12px + var(--safe-r)) 0 calc(12px + var(--safe-l)); background:var(--sr-bg); border-bottom:1px solid var(--sr-rule); }
+  .brand { display:flex; align-items:center; gap:8px; min-width:0; color:var(--sr-fg); }
+  .brand .frog { width:22px; height:22px; color:var(--sr-accent); flex:none; }
+  .brand .brand-link { display:flex; color:var(--sr-accent); }
+  .brand .wordmark { height:13px; width:auto; }
+  .brand .project { font:600 12.5px var(--sr-mono); white-space:nowrap; }
+  #topright { display:flex; align-items:center; gap:6px; }
+  .pill { display:inline-flex; align-items:center; gap:6px; padding:4px 10px; min-height:28px; border-radius:999px;
+          background:var(--sr-pill-bg); border:1px solid var(--sr-pill-border); color:var(--sr-fg); font:500 11.5px/1 var(--sr-mono); letter-spacing:.02em; white-space:nowrap; }
+  #live { gap:7px; }
+  #dot { width:7px; height:7px; border-radius:50%; background:var(--sr-warn); flex:none; }
+  #dot.ok { background:var(--sr-accent); animation:pulse 2.4s infinite; } #dot.warn { background:var(--sr-warn); }
+  #live:not(.ok) { border-color:var(--sr-warn); color:var(--sr-warn); }
+  @keyframes pulse { 0%,100% { opacity:1 } 50% { opacity:.45 } }
+  .icon-btn { width:36px; height:36px; border-radius:999px; background:var(--sr-pill-bg); border:1px solid var(--sr-pill-border); color:var(--sr-fg);
+              display:grid; place-items:center; flex:none; }
+  .icon-btn svg { width:16px; height:16px; stroke:currentColor; fill:none; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; }
+  .icon-btn:hover { border-color:var(--sr-accent); }
+  /* the stage: the video with the F3 HUD on top and the vitals HUD + STOP at the bottom; a tap toggles fullscreen */
+  #stage { flex:none; background:var(--sr-bg); }
+  #eyes { position:relative; }
+  #view { position:relative; background:#000; } /* the HUD and the veil anchor to the VIDEO, not the strip below it */
   #video { width:100%; aspect-ratio:16/9; background:#000; object-fit:cover; display:block; }
-  #stage.full { position:fixed; inset:0; z-index:50; display:flex; flex-direction:column;
-                justify-content:center; padding-top:0; }
+  #view.stale #video { filter:grayscale(.6) brightness(.8); }
+  #stage.full { position:fixed; inset:0; z-index:50; display:flex; flex-direction:column; justify-content:center; background:#000; }
+  #stage.full #eyes { flex:1; min-height:0; display:flex; flex-direction:column; }
   #stage.full #view { flex:1; min-height:0; display:flex; flex-direction:column; justify-content:center; }
   #stage.full #video { aspect-ratio:auto; height:100%; min-height:0; object-fit:contain; }
-  #hud { position:absolute; left:0; right:0; bottom:0; padding:26px 12px 8px;
-         background:linear-gradient(transparent, rgba(0,0,0,.75));
-         display:flex; align-items:flex-end; gap:12px; pointer-events:none;
-         font-size:12px; font-variant-numeric:tabular-nums; color:#dce3ea;
-         text-shadow:0 1px 2px rgba(0,0,0,.8); }
-  #dot { width:8px; height:8px; border-radius:50%; background:#e5534b; margin-bottom:4px; flex:none; }
-  #dot.ok { background:#3fb950; } #dot.warn { background:#e3b341; }
-  .bar { letter-spacing:1px; font-size:13px; line-height:1.2; }
-  #hearts .on { color:#ff5a52; } #food .on { color:#d29922; }
-  .bar .off { color:rgba(255,255,255,.25); }
-  #food span { font-size:11px; }
-  #food .off { filter:grayscale(1); opacity:.3; }
-  #hudright { margin-left:auto; text-align:right; color:#aeb8c2; white-space:nowrap; }
-  /* The one control on the stage. Reflex-level: POST /api/stop halts the
-     pathfinder, controls, digging and the journey without buying a model turn.
-     Red first, like the tiny body card; big enough for a thumb (44px). */
-  #stopBtn { pointer-events:auto; flex:none; min-width:64px; height:44px; padding:0 14px;
-             border-radius:12px; background:#b62324; color:#fff; font-weight:800; font-size:14px;
-             letter-spacing:1px; border:1px solid #ff7b72; box-shadow:0 2px 10px rgba(0,0,0,.6);
-             text-shadow:none; margin-bottom:2px; }
-  #stopBtn:active, #stopBtn.busy { background:#e5534b; }
+  #stage.full #xp, #stage.full #vitals { display:none; }
+  /* F3-style debug HUD: mono, white on the scrim, tabular */
+  #f3 { position:absolute; left:0; right:0; top:0; padding:8px 12px 22px; pointer-events:none; color:#fff;
+        font:500 11px/1.5 var(--sr-mono); font-variant-numeric:tabular-nums; text-shadow:0 1px 2px rgba(0,0,0,.9);
+        background:linear-gradient(rgba(0,0,0,.6), transparent); display:flex; justify-content:space-between; gap:12px; }
+  #f3 > div { min-width:0; } #f3 .r { text-align:right; }
+  #f3 .k { color:rgba(255,255,255,.6); margin-right:6px; }
+  #f3 .tag { display:inline-block; padding:0 5px; border:1px solid #fff; font-weight:700; letter-spacing:.1em; font-size:9.5px; line-height:14px; margin-left:6px; vertical-align:1px; }
+  #f3 .tag.stale { border-color:var(--sr-warn); color:var(--sr-warn); }
+  #hud { position:absolute; left:0; right:0; bottom:0; padding:28px 12px 10px;
+         background:linear-gradient(transparent, rgba(0,0,0,.72));
+         display:flex; align-items:flex-end; gap:12px; pointer-events:none; color:#fff; }
+  .bars { display:flex; flex-direction:column; gap:3px; }
+  .bar { display:flex; gap:2px; height:11px; }
+  .bar svg { width:11px; height:11px; display:block; shape-rendering:crispEdges; }
+  #hearts .on { fill:var(--mc-heart); } #food .on { fill:var(--mc-food); } #armor .on { fill:var(--mc-armor); }
+  .bar .off { fill:rgba(255,255,255,.28); } .bar .shade { fill:rgba(0,0,0,.55); }
+  #armor[hidden] { display:none; }
+  #hudright { margin-left:auto; display:flex; align-items:flex-end; gap:8px; }
+  /* The one control on the stage. Reflex-level: POST /api/stop halts the pathfinder, controls, digging and the journey
+     without buying a model turn. A Minecraft block button: 2px hard border, no radius, big enough for a thumb (44px). */
+  #stopBtn { pointer-events:auto; flex:none; min-width:72px; height:44px; padding:0 14px; border-radius:0;
+             background:var(--sr-danger); color:var(--sr-on-danger); border:var(--mc-px) solid #fff;
+             font:800 13px var(--sr-mono); letter-spacing:.14em; text-shadow:none; }
+  #stopBtn:active, #stopBtn.busy { filter:brightness(1.12); transform:translateY(1px); }
   #stopBtn:disabled { opacity:.6; }
-  /* Vitals strip under the video — the body card's state line + chips from
-     /api/telemetry (time, weather, where, xp, air, held, hostiles, players).
-     Mono numbers; a stale sample is dimmed and says so. */
-  #vitals { background:#0b0e14; border-top:1px solid #1c2230; padding:7px 14px 8px; font-size:12px;
-            display:flex; flex-direction:column; gap:5px; cursor:default; }
-  #vitals.stale { opacity:.55; }
-  #vstate { color:#dce3ea; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-  #vstate::before { content:'\u25B8 '; color:#58a6ff; }
-  #vitals.stale #vstate::after { content:' \u00b7 stale'; color:#e3b341; font-weight:400; }
+  #stageback { pointer-events:auto; display:none; flex:none; height:44px; padding:0 12px; border-radius:0;
+               background:rgba(0,0,0,.55); color:#fff; border:var(--mc-px) solid #fff; font:600 12px var(--sr-mono); text-shadow:none; }
+  #stageback.show { display:block; }
+  /* XP bar: the task in flight as a thin green line; the level badge at its end */
+  #xp { position:relative; height:4px; background:var(--sr-chip-bg); overflow:hidden; }
+  #xp[hidden] { display:none; }
+  #xp span { position:absolute; left:0; top:0; bottom:0; width:40%; background:var(--sr-accent); }
+  #xp.busy span { animation:xpshimmer 2.2s linear infinite; }
+  @keyframes xpshimmer { from { left:-40%; } to { left:100%; } }
+  /* Vitals strip under the video — the body card's state line, chips from /api/telemetry and the HOTBAR. */
+  #vitals { position:relative; background:var(--sr-bg); border-bottom:1px solid var(--sr-rule); padding:9px 12px 10px;
+            display:flex; flex-direction:column; gap:7px; cursor:default; }
+  #vitals.stale .vchip, #vitals.stale #vstate { color:var(--sr-muted); }
+  #vhead { display:flex; align-items:center; gap:8px; min-height:28px; }
+  #vstate { flex:1; min-width:0; font:600 13px var(--sr-mono); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  #vstate::before { content:'\u25B8 '; color:var(--sr-accent); }
+  #vitals.stale #vstate::after { content:' \u00b7 stale'; color:var(--sr-warn); font-weight:500; }
   #vchips { display:flex; gap:6px; overflow-x:auto; scrollbar-width:none; -webkit-overflow-scrolling:touch; }
   #vchips::-webkit-scrollbar { display:none; }
-  .vchip { flex:none; border:1px solid #2a3242; border-radius:8px; padding:2px 8px; color:#aeb8c2;
-           font-variant-numeric:tabular-nums; font-feature-settings:'tnum'; }
-  .vchip b { color:#8b98a5; font-weight:500; margin-right:5px; text-transform:uppercase; font-size:10px; letter-spacing:.5px; }
-  .vchip.warn { border-color:#5a4a1a; color:#e3b341; } .vchip.bad { border-color:#6e2c31; color:#ff7b72; }
-  #stage.full #vitals { display:none; }
-  #vitals { position:relative; }
-  #invBtn { position:absolute; right:10px; top:5px; background:none; border:1px solid #2a3242; color:#aeb8c2;
-            border-radius:8px; padding:3px 9px; font-size:11px; font-weight:600; min-height:24px; }
-  #invBtn[aria-expanded="true"] { background:#1c2230; color:#dce3ea; }
-  #inv { display:grid; grid-template-columns:repeat(auto-fill, minmax(96px, 1fr)); gap:4px; padding-top:4px; }
+  .vchip { flex:none; display:inline-flex; align-items:center; gap:5px; min-height:24px; padding:2px 9px; border-radius:999px;
+           background:var(--sr-chip-bg); color:var(--sr-ink-2); font:500 11px var(--sr-mono); font-variant-numeric:tabular-nums; }
+  .vchip b { color:var(--sr-fg); font-weight:600; text-transform:uppercase; font-size:9.5px; letter-spacing:.06em; }
+  .vchip.warn { color:var(--sr-warn); } .vchip.bad { color:var(--sr-danger); }
+  #invBtn { flex:none; min-height:28px; padding:3px 10px; }
+  #invBtn[aria-expanded="true"] { background:var(--sr-accent); border-color:var(--sr-accent); color:var(--sr-on-accent); }
+  /* the hotbar: 9 slots, 2px block borders, the held slot framed in ink like the game's selector */
+  #hotbar { display:grid; grid-template-columns:repeat(9, 1fr); gap:3px; max-width:440px; }
+  .slot { position:relative; aspect-ratio:1; min-width:0; background:var(--sr-chip-bg); border:var(--mc-px) solid var(--mc-slot-border); border-radius:0;
+          display:grid; place-items:center; font:600 10.5px var(--sr-mono); color:var(--sr-ink-2); overflow:hidden; }
+  .slot .ab { text-transform:lowercase; letter-spacing:.02em; }
+  .slot b { position:absolute; right:2px; bottom:0; font-size:10px; color:var(--sr-fg); font-variant-numeric:tabular-nums; }
+  .slot.held { border-color:var(--sr-fg); color:var(--sr-fg); outline:1px solid var(--sr-fg); outline-offset:1px; }
+  .slot.blank { background:transparent; }
+  #inv { display:grid; grid-template-columns:repeat(auto-fill, minmax(104px, 1fr)); gap:4px; }
   #inv[hidden] { display:none; }
-  .slot { display:flex; justify-content:space-between; gap:6px; background:#10141c; border:1px solid #1c2230;
-          border-radius:6px; padding:3px 7px; font-size:11px; color:#aeb8c2; white-space:nowrap; overflow:hidden; }
-  .slot span { overflow:hidden; text-overflow:ellipsis; }
-  .slot b { color:#dce3ea; font-variant-numeric:tabular-nums; }
-  .slot.held { border-color:#1f6feb; color:#dce3ea; }
-  .slot.empty { grid-column:1/-1; color:#8b98a5; justify-content:center; }
-  #vstall { position:absolute; inset:0; display:none; align-items:center; justify-content:center;
-            background:rgba(11,14,20,.55); color:#aeb8c2; font-size:13px; letter-spacing:.3px;
-            backdrop-filter:blur(2px); -webkit-backdrop-filter:blur(2px); }
+  #inv .row { display:flex; justify-content:space-between; gap:6px; background:var(--sr-chip-bg); border:var(--mc-px) solid var(--mc-slot-border);
+              padding:4px 8px; font:500 11px var(--sr-mono); color:var(--sr-ink-2); white-space:nowrap; overflow:hidden; }
+  #inv .row span { overflow:hidden; text-overflow:ellipsis; } #inv .row b { color:var(--sr-fg); font-variant-numeric:tabular-nums; }
+  #inv .row.held { border-color:var(--sr-fg); color:var(--sr-fg); }
+  #inv .row.empty { grid-column:1/-1; color:var(--sr-muted); justify-content:center; border-style:dashed; }
+  /* the veil over the video: one honest line in a card, a pixel spinner that steps */
+  #vstall { position:absolute; inset:0; display:none; align-items:center; justify-content:center; padding:16px; background:var(--sr-scrim); }
   #vstall.show { display:flex; }
-  #vstall span { display:flex; align-items:center; gap:8px; }
-  #vstall.warn { color:#e3b341; } #vstall.bad { color:#ff7b72; }
+  #vstall > span { display:flex; align-items:center; gap:10px; max-width:100%; padding:9px 14px; background:var(--sr-bg); color:var(--sr-fg);
+                 border:1px solid var(--sr-card-border); border-radius:var(--sr-radius); font:500 12px/1.4 var(--sr-mono); }
+  #vstall.warn > span { color:var(--sr-warn); border-color:var(--sr-warn); } #vstall.bad > span { color:var(--sr-danger); border-color:var(--sr-danger); }
   #vstall .spin.off { display:none; }
-  .spin { width:14px; height:14px; border:2px solid #2a3242; border-top-color:#58a6ff;
-          border-radius:50%; animation:spin 1s linear infinite; }
+  .spin { width:12px; height:12px; flex:none; border:3px solid var(--sr-rule); border-top-color:var(--sr-accent); border-radius:0; animation:spin 1s steps(8) infinite; }
   @keyframes spin { to { transform:rotate(360deg); } }
-  @media (prefers-reduced-motion: reduce) { .spin { animation:none; } }
-  #feed { flex:1; overflow-y:auto; padding:10px 14px; -webkit-overflow-scrolling:touch; }
-  /* Chat-style feed: my messages right, the bot's left, everything else quiet rows. */
-  .ev { display:flex; flex-direction:column; margin:0 0 8px; word-wrap:break-word; }
-  .ev .bubble { max-width:82%; padding:8px 12px; border-radius:16px; white-space:pre-wrap; }
-  .ev .meta { font-size:11px; color:#8b98a5; margin:2px 6px 0; }
+  /* the agent dock: crew strip, filters, the feed, quick chips, the composer */
+  #feed { flex:1; overflow-y:auto; padding:10px 14px; -webkit-overflow-scrolling:touch; scrollbar-width:thin; }
+  .ev { display:flex; flex-direction:column; margin:0 0 10px; word-wrap:break-word; }
+  .ev .bubble { max-width:86%; padding:8px 12px; border-radius:var(--sr-radius); white-space:pre-wrap; line-height:1.5; }
+  .ev .meta { font:500 10px var(--sr-mono); text-transform:uppercase; letter-spacing:.08em; color:var(--sr-muted); margin:3px 2px 0; }
   .ev.in { align-items:flex-end; }
-  .ev.in .bubble { background:#1f6feb; color:#fff; border-bottom-right-radius:4px; }
-  .ev.in.pending .bubble { opacity:.6; }
+  .ev.in .bubble { background:var(--sr-fg); color:var(--sr-bg); }
+  .ev.in.pending .bubble { opacity:.55; }
   .ev.out { align-items:flex-start; }
-  .ev.out .bubble { background:#1c2230; border-bottom-left-radius:4px; }
+  .ev.out .bubble { background:var(--sr-card-bg); border:1px solid var(--sr-card-border); }
+  .ev.out .meta { color:var(--sr-accent); }
   .ev.chat { align-items:flex-start; }
-  .ev.chat .bubble { background:#16121c; border:1px solid #2a2236; border-bottom-left-radius:4px; }
-  .ev.chat .meta { color:#f778ba; }
-  .ev.journey, .ev.worker, .ev.thought, .ev.system, .ev.voice { align-items:center; }
+  .ev.chat .bubble { background:var(--sr-chip-bg); color:var(--sr-ink-2); }
+  .ev.journey, .ev.worker, .ev.thought, .ev.system, .ev.voice { align-items:stretch; margin:0 0 8px; }
   .ev.journey .bubble, .ev.worker .bubble, .ev.thought .bubble, .ev.system .bubble, .ev.voice .bubble {
-    background:none; font-size:12px; color:#8b98a5; text-align:center; padding:2px 10px; }
-  .ev.journey .bubble { color:#d29922; }
-  .ev.worker .bubble { color:#bc8cff; }
-  .ev.thought .bubble { font-style:italic; }
-  .ev.system .bubble { color:#9aa5b1; }
-  .ev.system.alert .bubble { color:#ff7b72; }
-  .ev.voice .bubble { color:#58c6ff; }
-  .day { display:flex; align-items:center; gap:10px; color:#8b98a5; font-size:11px; margin:14px 0 10px; }
-  .day::before, .day::after { content:''; flex:1; border-top:1px solid #1c2230; }
-  /* Kind filters: which event kinds the feed shows. Off-pills collect an
-     unread count so muted noise is still discoverable. */
-  #filters { display:flex; gap:6px; padding:8px 14px 0; overflow-x:auto; scrollbar-width:none;
-             -webkit-overflow-scrolling:touch; }
+    max-width:none; background:none; border-left:2px solid var(--sr-muted); border-radius:0; padding:2px 10px; font:12px/1.45 var(--sr-mono); color:var(--sr-ink-2); }
+  .ev.journey .bubble, .ev.worker .bubble, .ev.thought .bubble, .ev.system .bubble, .ev.voice .bubble { white-space:normal; }
+  .ev.journey .meta, .ev.worker .meta, .ev.thought .meta, .ev.system .meta, .ev.voice .meta { margin-left:12px; }
+  .ev.journey .bubble { border-left-color:var(--sr-warn); }
+  .ev.worker .bubble { border-left-color:var(--sr-accent); }
+  .ev.thought .bubble { font-style:italic; color:var(--sr-muted); }
+  .ev.system.alert .bubble { color:var(--sr-danger); border-left-color:var(--sr-danger); }
+  .ev.voice .bubble { border-left-color:var(--sr-info); }
+  .day { display:flex; align-items:center; gap:10px; color:var(--sr-muted); font:500 10px var(--sr-mono); text-transform:uppercase; letter-spacing:.1em; margin:14px 0 10px; }
+  .day::before, .day::after { content:''; flex:1; border-top:1px solid var(--sr-rule); }
+  /* Kind filters: which event kinds the feed shows. Off-pills collect an unread count so muted noise is still discoverable. */
+  #filters { display:flex; gap:6px; padding:8px 14px 0; overflow-x:auto; scrollbar-width:none; -webkit-overflow-scrolling:touch; }
   #filters::-webkit-scrollbar { display:none; }
-  .fpill { display:flex; align-items:center; gap:5px; background:none; border:1px solid #2a3242;
-           color:#8b98a5; border-radius:12px; padding:5px 11px; font-size:12px; flex:none; min-height:28px; }
-  .fpill.on { color:#dce3ea; background:#1c2230; }
-  .fbadge { background:#1f6feb; color:#fff; border-radius:8px; padding:0 5px; font-size:10px;
-            min-width:16px; text-align:center; }
-  #jump { position:fixed; left:50%; transform:translateX(-50%);
-          bottom:calc(120px + env(safe-area-inset-bottom)); background:#1f6feb; color:#fff;
-          border:0; border-radius:14px; padding:6px 14px; font-size:13px; font-weight:600;
-          box-shadow:0 2px 10px rgba(0,0,0,.5); display:none; z-index:40; }
+  .fpill { display:inline-flex; align-items:center; gap:5px; flex:none; min-height:28px; padding:4px 11px; border-radius:999px;
+           background:var(--sr-pill-bg); border:1px solid var(--sr-pill-border); color:var(--sr-muted); font:500 11.5px/1 var(--sr-mono); }
+  .fpill.on { color:var(--sr-fg); border-color:var(--sr-fg); }
+  .fbadge { background:var(--sr-accent); color:var(--sr-on-accent); border-radius:999px; padding:1px 5px; font-size:9.5px; min-width:16px; text-align:center; font-weight:700; }
+  #jump { position:fixed; left:50%; transform:translateX(-50%); bottom:calc(124px + var(--safe-bot)); background:var(--sr-fg); color:var(--sr-bg);
+          border:0; border-radius:999px; padding:6px 14px; font:600 12px var(--sr-mono); display:none; z-index:40; }
   #jump.show { display:block; }
   /* Live activity strip: one card per journey/worker heard from recently. */
-  #crew { display:none; gap:8px; overflow-x:auto; padding:8px 14px 0; scrollbar-width:none;
-          -webkit-overflow-scrolling:touch; }
+  #crew { display:none; gap:8px; overflow-x:auto; padding:10px 14px 0; scrollbar-width:none; -webkit-overflow-scrolling:touch; }
   #crew.has { display:flex; }
   #crew::-webkit-scrollbar { display:none; }
-  .card { flex:none; width:190px; background:#10141c; border:1px solid #2a3242; border-radius:10px;
-          padding:7px 10px; font-size:12px; }
-  .card .cname { font-weight:600; display:flex; justify-content:space-between; gap:6px; }
-  .card.worker .cname { color:#bc8cff; }
-  .card.journey .cname { color:#d29922; }
-  .card .csteps { color:#8b98a5; font-weight:400; }
-  .card .cline { color:#8b98a5; margin-top:2px; overflow:hidden; display:-webkit-box;
-                 -webkit-line-clamp:2; -webkit-box-orient:vertical; }
-  .card .ctitle { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; }
-  .card .csub { color:#8b98a5; font-size:11px; font-weight:400; margin-top:1px; }
-  /* Worker cards are BODIES (CREW.md): a live thumbnail from the worker's own
-     eyes, its own reflex STOP, and a tap swaps the stage to its stream. */
+  .card { flex:none; width:200px; background:var(--sr-card-bg); border:1px solid var(--sr-card-border); border-radius:var(--sr-radius); padding:9px 10px; font-size:12px; }
+  .card .cname { display:flex; align-items:center; gap:7px; font-weight:600; min-width:0; }
+  .card .head { flex:none; width:18px; height:18px; display:grid; place-items:center; border:var(--mc-px) solid var(--sr-fg); font:700 10px var(--sr-mono); color:var(--sr-fg); background:var(--sr-chip-bg); }
+  .card.worker .head { border-color:var(--sr-accent); color:var(--sr-accent); }
+  .card.journey .head { border-color:var(--sr-warn); color:var(--sr-warn); }
+  .card .ctitle { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; font-size:12.5px; }
+  .card .csub { color:var(--sr-muted); font:500 10.5px var(--sr-mono); margin-top:3px; }
+  .card .cline { color:var(--sr-ink-2); margin-top:4px; overflow:hidden; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; line-height:1.4; }
   .card.worker.live { cursor:pointer; }
-  .card.worker.live:hover, .card.worker.live:focus-visible { border-color:#bc8cff; outline:none; }
-  .card.staged { border-color:#bc8cff; box-shadow:0 0 0 1px #bc8cff inset; }
-  .card .cthumb { display:block; width:100%; aspect-ratio:16/9; object-fit:cover; background:#000;
-                  border-radius:6px; margin-top:6px; }
-  .card .crow { display:flex; align-items:center; justify-content:space-between; gap:6px; margin-top:6px; }
-  .card .cstate { color:#8b98a5; font-size:11px; }
-  .card .cstate.stalled { color:#e3b341; } .card .cstate.working { color:#3fb950; }
-  .card .cstop { flex:none; min-width:44px; height:28px; padding:0 10px; border-radius:8px; background:#b62324;
-                 color:#fff; font-weight:800; font-size:11px; letter-spacing:1px; border:1px solid #ff7b72; }
+  .card.worker.live:hover, .card.worker.live:focus-visible { border-color:var(--sr-accent); outline:none; }
+  .card.staged { border:var(--mc-px) solid var(--sr-accent); }
+  .card .cthumb { display:block; width:100%; aspect-ratio:16/9; object-fit:cover; background:#000; border-radius:4px; margin-top:7px; }
+  .card .crow { display:flex; align-items:center; justify-content:space-between; gap:6px; margin-top:7px; }
+  .card .cstate { color:var(--sr-muted); font:500 11px var(--sr-mono); }
+  .card .cstate.stalled { color:var(--sr-warn); } .card .cstate.working { color:var(--sr-accent); }
+  .card .cstop { flex:none; min-width:44px; height:28px; padding:0 10px; border-radius:0; background:var(--sr-danger); color:var(--sr-on-danger);
+                 font:800 10.5px var(--sr-mono); letter-spacing:.12em; border:var(--mc-px) solid var(--sr-fg); }
   .card .cstop:disabled { opacity:.6; }
-  #stageback { pointer-events:auto; display:none; flex:none; height:44px; padding:0 12px; border-radius:12px;
-               background:rgba(0,0,0,.55); color:#fff; border:1px solid #2a3242; font-weight:600; font-size:13px;
-               text-shadow:none; margin-bottom:2px; }
-  #stageback.show { display:block; }
-  #chips { display:flex; gap:8px; overflow-x:auto; padding:8px 14px 0; background:#10141c;
-           border-top:1px solid #1c2230; -webkit-overflow-scrolling:touch; scrollbar-width:none; }
+  #chips { display:flex; gap:7px; overflow-x:auto; padding:8px 14px 0; border-top:1px solid var(--sr-rule); -webkit-overflow-scrolling:touch; scrollbar-width:none; }
   #chips::-webkit-scrollbar { display:none; }
-  .chip { flex:none; background:#1c2230; color:#aeb8c2; border:1px solid #2a3242; border-radius:14px;
-          padding:5px 12px; font-size:13px; font-weight:500; }
-  .chip:active { background:#2a3242; }
-  form { display:flex; gap:8px; padding:10px 14px; padding-bottom:max(10px, env(safe-area-inset-bottom));
-         background:#10141c; }
-  input[type=text] { flex:1; background:#0b0e14; border:1px solid #2a3242; color:#dce3ea;
-         border-radius:18px; padding:9px 14px; font-size:16px; outline:none; }
-  button { background:#1f6feb; color:#fff; border:0; border-radius:18px; padding:9px 16px;
-         font-size:15px; font-weight:600; }
-  button:disabled { opacity:.5; }
-  /* 📞 the call button: idle → connecting (pulse) → live (green + pulsing dot). */
-  #callBtn { background:#1c2230; border:1px solid #2a3242; color:#dce3ea; padding:9px 13px; }
-  #callBtn.connecting { animation:vpulse 1s ease-in-out infinite; }
-  #callBtn.live { background:#238636; border-color:#2ea043; }
-  #callBtn.live .calldot { display:inline-block; width:8px; height:8px; border-radius:50%;
-         background:#ff6b6b; margin-right:6px; animation:vpulse 1.2s ease-in-out infinite; }
-  @keyframes vpulse { 0%,100% { opacity:1; } 50% { opacity:.45; } }
-  #toast { position:fixed; left:50%; bottom:calc(88px + env(safe-area-inset-bottom));
-           transform:translateX(-50%) translateY(8px); background:#3d1d20; color:#ffb3ad;
-           border:1px solid #6e2c31; border-radius:10px; padding:8px 14px; font-size:13px;
-           max-width:86%; opacity:0; pointer-events:none; transition:opacity .2s, transform .2s; z-index:60; }
+  .chip { flex:none; display:inline-flex; align-items:center; min-height:30px; padding:4px 12px; border-radius:999px;
+          background:var(--sr-pill-bg); border:1px solid var(--sr-pill-border); color:var(--sr-fg); font-size:12.5px; }
+  .chip:active, .chip:hover { border-color:var(--sr-accent); }
+  /* the composer: one pill bar, call · text · send */
+  form { display:flex; align-items:center; gap:6px; margin:8px 12px; margin-bottom:max(10px, var(--safe-bot));
+         padding:4px 4px 4px 6px; background:var(--sr-bg); border:1px solid var(--sr-card-border); border-radius:999px; }
+  form:focus-within { border-color:var(--sr-accent); }
+  input[type=text] { flex:1; min-width:0; background:transparent; border:0; color:var(--sr-fg); padding:8px 6px; font-size:16px; outline:none; }
+  input[type=text]::placeholder { color:var(--sr-muted); }
+  #sendBtn { flex:none; height:36px; min-width:36px; padding:0 14px; border-radius:999px; background:var(--sr-accent); color:var(--sr-on-accent); font:600 12.5px var(--sr-mono); }
+  #sendBtn:disabled { opacity:.5; }
+  /* 📞 the call button: idle → connecting (pulse) → live (green). */
+  #callBtn { flex:none; width:36px; height:36px; border-radius:999px; border:1px solid var(--sr-pill-border); background:var(--sr-pill-bg); color:var(--sr-fg); font-size:15px; display:grid; place-items:center; }
+  #callBtn.connecting { animation:pulse 1s ease-in-out infinite; }
+  #callBtn.live { background:var(--sr-accent); border-color:var(--sr-accent); color:var(--sr-on-accent); width:auto; padding:0 12px; font:600 11.5px var(--sr-mono); }
+  #callBtn.live .calldot { display:inline-block; width:7px; height:7px; border-radius:50%; background:var(--sr-on-accent); margin-right:6px; animation:pulse 1.2s ease-in-out infinite; }
+  #toast { position:fixed; left:50%; bottom:calc(84px + var(--safe-bot)); transform:translateX(-50%) translateY(8px); background:var(--sr-bg); color:var(--sr-danger);
+           border:1px solid var(--sr-danger); border-radius:999px; padding:8px 14px; font:500 12.5px var(--sr-mono); max-width:86%; opacity:0; pointer-events:none;
+           transition:opacity .2s, transform .2s; z-index:60; }
   #toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
-  #toast.ok { background:#12261a; color:#7ee787; border-color:#1f6b3a; }
-  /* Above everything incl. the stage (#stage is positioned and later in the
-     DOM, so without a z-index the black video box painted OVER the gate on
-     any viewport wide enough for the 16:9 stage to reach the centre). */
-  #gate { position:fixed; inset:0; z-index:100; background:#0b0e14; display:flex; flex-direction:column;
-          align-items:center; justify-content:center; gap:14px; padding:24px; text-align:center; }
+  #toast.ok { color:var(--sr-fg); border-color:var(--sr-accent); }
+  /* Above everything incl. the stage (#stage is positioned and later in the DOM, so without a z-index the black video
+     box painted OVER the gate on any viewport wide enough for the 16:9 stage to reach the centre). */
+  #gate { position:fixed; inset:0; z-index:100; background:var(--sr-bg); display:grid; place-items:center; padding:20px; overflow-y:auto; }
   #gate.hidden { display:none; }
-  #gate p { color:#8b98a5; max-width:320px; }
+  .gate-card { width:min(400px, 94vw); background:var(--sr-card-bg); border:1px solid var(--sr-card-border); border-radius:var(--sr-radius); padding:26px 24px; display:flex; flex-direction:column; gap:10px; }
+  .gate-card .brand { margin-bottom:8px; } .gate-card .frog { width:28px; height:28px; }
+  #gate h1 { font:600 18px/1.3 var(--sr-mono); }
+  #gate p { color:var(--sr-ink-2); font-size:13.5px; line-height:1.5; }
+  .gate-btn { width:100%; min-height:42px; padding:10px 14px; border-radius:999px; font:600 13px var(--sr-mono); background:var(--sr-accent); color:var(--sr-on-accent); border:1px solid var(--sr-accent); }
+  .gate-btn:disabled { opacity:.45; }
+  .gate-foot { margin-top:6px; font:10.5px var(--sr-mono); color:var(--sr-muted); display:flex; justify-content:space-between; gap:8px; }
+  /* settings drawer: scheme, auth, about — a flat scrim and a 1px rule, like expo */
+  #drawer { position:fixed; inset:0; z-index:80; background:var(--sr-scrim); display:flex; justify-content:flex-end; }
+  #drawer[hidden] { display:none; }
+  .drawer { width:min(380px, 92vw); height:100%; background:var(--sr-bg); border-left:1px solid var(--sr-card-border); display:flex; flex-direction:column; gap:14px;
+            padding:calc(12px + var(--safe-top)) 16px calc(16px + var(--safe-bot)); overflow-y:auto; }
+  .drawer-head { display:flex; align-items:center; justify-content:space-between; gap:8px; min-height:40px; font:600 13px var(--sr-mono); }
+  .lbl { font:600 10.5px var(--sr-mono); text-transform:uppercase; letter-spacing:.08em; color:var(--sr-muted); margin-bottom:6px; }
+  .row { display:flex; gap:6px; flex-wrap:wrap; }
+  .pill.on { background:var(--sr-accent); border-color:var(--sr-accent); color:var(--sr-on-accent); }
+  .note { font-size:12.5px; color:var(--sr-ink-2); line-height:1.55; } .note b { color:var(--sr-fg); }
+  .note a { color:var(--sr-accent); }
+  kbd { font:11px var(--sr-mono); padding:1px 6px; border:1px solid var(--sr-rule); border-radius:5px; background:var(--sr-chip-bg); }
   .sr { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; }
-  #feed:focus-visible, #vchips:focus-visible, #crew:focus-visible, #filters:focus-visible, #chips:focus-visible { outline:2px solid #58a6ff; outline-offset:-2px; }
-  /* Phone: #side is invisible to layout, its children stay body's flex items. */
+  #feed:focus-visible, #vchips:focus-visible, #crew:focus-visible, #filters:focus-visible, #chips:focus-visible { outline:2px solid var(--sr-accent); outline-offset:-2px; }
+  @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation:none !important; transition:none !important; } #xp.busy span { left:0; width:100%; opacity:.5; } }
+  /* Phone: #side is invisible to layout, its children stay body's flex items. Crew cards are compact — one line and a
+     short strip of the worker's eyes — so the feed keeps its room on an 844px screen. */
   #side { display:contents; }
-  /* Desktop (≥900px): the 16:9 stage used to be the whole viewport (1440×810 of
-     900) and the feed got 20px. Two columns instead — the world on the left,
-     letterboxed to whatever height is there; the conversation on the right as a
-     phone-width column with its own scroll, composer pinned to its bottom. */
+  @media (max-width: 899px) {
+    .card { width:176px; padding:8px 9px; }
+    .card .cline { -webkit-line-clamp:1; }
+    .card .cthumb { aspect-ratio:3/1; margin-top:6px; }
+    .card .crow { margin-top:6px; }
+  }
+  /* Desktop (≥900px): the cockpit. Topbar strip across; the world on the left, letterboxed to whatever height is there,
+     its telemetry card under it; the agent dock on the right as a phone-width column with its own scroll. */
   @media (min-width: 900px) {
-    body { display:grid; grid-template-columns:minmax(0,1fr) clamp(360px, 32vw, 460px);
-           grid-template-rows:100dvh; }
-    #stage { display:flex; flex-direction:column; min-height:0; padding-top:0; }
+    body { display:grid; grid-template-columns:minmax(0,1fr) clamp(360px, 32vw, 460px); grid-template-rows:auto minmax(0,1fr); }
+    #top { grid-column:1 / -1; }
+    #stage { display:flex; flex-direction:column; min-height:0; padding:12px 0 12px 12px; gap:10px; }
+    #eyes { flex:1; min-height:0; display:flex; flex-direction:column; border:1px solid var(--sr-card-border); border-radius:var(--sr-radius); overflow:hidden; }
     #view { flex:1; min-height:0; display:flex; flex-direction:column; justify-content:center; }
     #video { flex:1; min-height:0; aspect-ratio:auto; object-fit:contain; }
-    #hud { bottom:auto; top:0; padding:8px 12px 26px; align-items:flex-start;
-           background:linear-gradient(rgba(0,0,0,.75), transparent); }
-    #vitals { padding:9px 16px 10px; }
-    #stage:not(.full) { cursor:zoom-in; }
-    #side { display:flex; flex-direction:column; min-height:0; position:relative;
-            background:#0b0e14; border-left:1px solid #1c2230; }
+    #stage:not(.full) #view { cursor:zoom-in; }
+    #xp { flex:none; }
+    #vitals { flex:none; border:1px solid var(--sr-card-border); border-radius:var(--sr-radius); padding:10px 12px 12px; }
+    #hotbar { max-width:none; }
+    #side { display:flex; flex-direction:column; min-height:0; position:relative; margin:12px; border:1px solid var(--sr-card-border); border-radius:var(--sr-radius); overflow:hidden; }
     #jump { position:absolute; bottom:120px; }
     #toast { bottom:88px; left:auto; right:16px; transform:translateY(8px); max-width:420px; }
     #toast.show { transform:translateY(0); }
     #feed { padding:12px 16px; }
+    .brand .wordmark { height:15px; } .brand .frog { width:24px; height:24px; }
+  }
+  /* Wide desktop (≥1280px): three zones — eyes · telemetry · agent dock. */
+  @media (min-width: 1280px) {
+    body { grid-template-columns:minmax(0,1fr) 300px clamp(360px, 28vw, 440px); }
+    #stage:not(.full) { display:contents; }
+    #eyes { grid-column:1; grid-row:2; margin:12px 0 12px 12px; display:flex; }
+    #vitals { grid-column:2; grid-row:2; margin:12px 0 12px 12px; align-self:start; max-height:calc(100% - 24px); overflow-y:auto; }
+    #hotbar { grid-template-columns:repeat(9, 1fr); }
+    .slot { font-size:9px; } .slot b { font-size:9px; }
+    #inv { grid-template-columns:1fr 1fr; }
+    #side { grid-column:3; }
   }
 </style>
 </head>
 <body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="px-heart" viewBox="0 0 7 7"><path d="M1 0h2v1h1v-1h2v1h1v3h-1v1h-1v1h-1v1h-1v-1h-1v-1h-1v-1h-1v-3h1z"/></symbol>
+    <symbol id="px-food" viewBox="0 0 7 7"><path d="M4 0h2v1h1v2h-1v1h-1v1h-1v1h-1v1h-1v-1h-1v-1h1v-1h1v-1h1v-1h1z"/></symbol>
+    <symbol id="px-armor" viewBox="0 0 7 7"><path d="M0 0h2v1h3v-1h2v4h-1v3h-5v-3h-1z"/></symbol>
+  </defs>
+</svg>
 <div id="gate">
-  <h1>⛏️ StrandsBot</h1>
-  <p id="gateMsg">…</p>
-  <button id="gateBtn" style="display:none"></button>
+  <div class="gate-card">
+    ${BRAND_HTML}
+    <h1>StrandsBot \u00b7 live</h1>
+    <p id="gateMsg">\u2026</p>
+    <button id="gateBtn" class="gate-btn" style="display:none"></button>
+    <div class="gate-foot"><span>passkey \u00b7 secure enclave</span><span>strands-minecraft</span></div>
+  </div>
 </div>
+<header id="top">
+  ${BRAND_HTML}
+  <div id="topright">
+    <span id="live" class="pill" role="status"><span id="dot"></span><span id="livetxt">connecting</span></span>
+    <button id="schemeBtn" class="icon-btn" type="button" aria-label="Switch between dark and paper" title="dark / paper"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 0 0 18z" fill="currentColor" stroke="none"/></svg></button>
+    <button id="menuBtn" class="icon-btn" type="button" aria-label="Settings" aria-haspopup="dialog" aria-expanded="false"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+  </div>
+</header>
 <div id="stage" role="region" aria-label="world view">
+  <div id="eyes">
   <div id="view">
   <img id="video" alt="">
+  <div id="f3" aria-hidden="true">
+    <div>
+      <div><span class="k">XYZ</span><span id="coords"></span></div>
+      <div id="f3where"></div>
+      <div id="f3clock"></div>
+    </div>
+    <div class="r">
+      <div id="watchers"></div>
+      <div id="f3fps"></div>
+    </div>
+  </div>
   <div id="vstall" role="status"><span><span class="spin"></span><span id="vtext"></span></span></div>
   <div id="hud">
-    <span id="dot"></span>
-    <div>
-      <div id="hearts" class="bar"></div>
-      <div id="food" class="bar"></div>
+    <div class="bars">
+      <div id="armor" class="bar px" hidden></div>
+      <div id="hearts" class="bar px"></div>
+      <div id="food" class="bar px"></div>
     </div>
     <div id="hudright">
-      <div id="coords"></div>
-      <div id="watchers"></div>
+      <button id="stageback" type="button" aria-label="Back to the bot's own camera">\u2190 bot</button>
+      <button id="stopBtn" type="button" aria-label="Stop the bot: halt movement, digging and the journey" title="Stop \u2014 reflex, no model turn">STOP</button>
     </div>
-    <button id="stageback" type="button" aria-label="Back to the bot's own camera">\u2190 bot</button>
-    <button id="stopBtn" type="button" aria-label="Stop the bot: halt movement, digging and the journey" title="Stop — reflex, no model turn">STOP</button>
   </div>
+  </div>
+  <div id="xp" hidden aria-hidden="true"><span></span></div>
   </div>
   <div id="vitals" aria-live="polite" aria-label="bot vitals">
-    <div id="vstate">no telemetry yet</div>
+    <div id="vhead">
+      <div id="vstate">no telemetry yet</div>
+      <button id="invBtn" class="pill" type="button" aria-expanded="false" aria-controls="inv">bag</button>
+    </div>
     <div id="vchips" tabindex="0" aria-label="vitals"></div>
-    <button id="invBtn" type="button" aria-expanded="false" aria-controls="inv">\uD83C\uDF92 bag</button>
+    <div id="hotbar" aria-label="hotbar"></div>
     <div id="inv" aria-label="inventory" hidden></div>
   </div>
 </div>
@@ -266,15 +422,24 @@ export const PAGE_HTML = /* html */ `<!doctype html>
 <div id="crew" tabindex="0" aria-label="journeys and workers"></div>
 <div id="filters" role="group" tabindex="0" aria-label="feed filters"></div>
 <div id="feed" role="log" aria-label="feed" tabindex="0"></div>
-<button id="jump" type="button">new messages ↓</button>
+<button id="jump" type="button">new messages \u2193</button>
 <div id="chips" tabindex="0" aria-label="quick messages"></div>
 <form id="composer">
-  <button id="callBtn" type="button" data-state="idle" title="voice call" aria-label="voice call">📞</button>
-  <input id="msg" type="text" placeholder="tell the bot…" aria-label="message to the bot" autocomplete="off">
+  <button id="callBtn" type="button" data-state="idle" title="voice call" aria-label="voice call">\uD83D\uDCDE</button>
+  <input id="msg" type="text" placeholder="tell the bot\u2026" aria-label="message to the bot" autocomplete="off">
   <button id="sendBtn">send</button>
 </form>
 </main>
 <div id="toast" role="status"></div>
+<div id="drawer" hidden role="dialog" aria-modal="true" aria-label="settings">
+  <div class="drawer">
+    <div class="drawer-head"><span>settings</span><button id="drawerClose" class="icon-btn" type="button" aria-label="Close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+    <div><div class="lbl">scheme</div><div class="row" id="schemeRow"><button type="button" class="pill" data-scheme="auto">auto</button><button type="button" class="pill" data-scheme="dark">dark</button><button type="button" class="pill" data-scheme="paper">paper</button></div></div>
+    <div><div class="lbl">this device</div><p class="note" id="authNote">\u2026</p></div>
+    <div><div class="lbl">controls</div><p class="note">Tap the video for fullscreen. <b>STOP</b> is a reflex: it halts the pathfinder, controls, digging and the journey without a model turn. Tap a worker card to put its eyes on the stage.</p></div>
+    <div><div class="lbl">about</div><p class="note"><b>strands-minecraft</b> \u2014 a Minecraft bot that is a real Strands agent. <a href="https://github.com/cagataycali/strands-minecraft" target="_blank" rel="noreferrer">github</a></p></div>
+  </div>
+</div>
 <script>
 const b64uToBuf = (s) => Uint8Array.from(atob(s.replace(/-/g,'+').replace(/_/g,'/')), c => c.charCodeAt(0));
 const bufToB64u = (b) => btoa(String.fromCharCode(...new Uint8Array(b))).replace(/\\+/g,'-').replace(/\\//g,'_').replace(/=+$/,'');
@@ -444,8 +609,9 @@ function renderCrew() {
     const top = document.createElement('div');
     top.className = 'cname';
     const t = crewTitle({ kind: c.kind, name, goal: c.goal, steps: c.steps });
+    const head = document.createElement('span'); head.className = 'head'; head.textContent = (name || '?').replace(/^j/, '').slice(0, 1).toUpperCase(); head.setAttribute('aria-hidden', 'true');
     const n = document.createElement('span'); n.className = 'ctitle'; n.textContent = t.title; n.title = t.title;
-    top.appendChild(n);
+    top.appendChild(head); top.appendChild(n);
     const sub = document.createElement('div'); sub.className = 'csub'; sub.textContent = t.sub;
     const line = document.createElement('div');
     line.className = 'cline';
@@ -584,14 +750,15 @@ setInterval(() => {
   }
 }, 60000);
 
+// Ten pixel sprites per row like the game's HUD: two points per sprite, a half
+// point drawn as a shaded sprite. glyph names the <symbol> (px-heart, px-food, px-armor).
 function glyphBar(el, count, glyph) {
-  const full = Math.max(0, Math.min(10, Math.round(count / 2)));
+  const c = Math.max(0, Math.min(20, Math.round(count)));
+  const full = Math.floor(c / 2), half = c % 2;
   el.innerHTML = '';
   for (let i = 0; i < 10; i++) {
-    const s = document.createElement('span');
-    s.className = i < full ? 'on' : 'off';
-    s.textContent = glyph;
-    el.appendChild(s);
+    const cls = i < full ? 'on' : (i === full && half) ? 'on half' : 'off';
+    el.insertAdjacentHTML('beforeend', '<svg class="' + cls + '" aria-hidden="true"><use href="#' + glyph + '"/></svg>');
   }
 }
 
@@ -676,6 +843,22 @@ function paintDot() {
   dot.classList.toggle('ok', sseOpen && botConnected !== false);
   dot.classList.toggle('warn', sseOpen && botConnected === false);
   dot.title = !sseOpen ? 'feed disconnected' : botConnected === false ? 'bot is not in the world' : 'live';
+  const live = document.getElementById('live');
+  live.classList.toggle('ok', sseOpen && botConnected !== false);
+  document.getElementById('livetxt').textContent = !sseOpen ? 'offline' : botConnected === false ? 'not in world' : 'live';
+}
+
+// F3 line: frames per second from the server's counter between two polls, and
+// the detector's own words when the picture is stale (byte-identical while the body moved).
+let fpsAt = 0, fpsFrames = null;
+function paintFps(frames, camera) {
+  const now = Date.now();
+  let fps = null;
+  if (typeof frames === 'number' && fpsFrames !== null && now > fpsAt) fps = Math.max(0, (frames - fpsFrames) / ((now - fpsAt) / 1000));
+  if (typeof frames === 'number') { fpsFrames = frames; fpsAt = now; }
+  const stale = /stale/.test(camera || '');
+  document.getElementById('view').classList.toggle('stale', stale);
+  document.getElementById('f3fps').innerHTML = (fps === null ? '\\u2014' : fps.toFixed(1)) + ' fps' + (stale ? '<span class="tag stale">STALE</span>' : '');
 }
 
 async function pollState() {
@@ -689,8 +872,8 @@ async function pollState() {
   lastState = s;
   botConnected = typeof s.connected === 'boolean' ? s.connected : null;
   paintDot();
-  glyphBar(document.getElementById('hearts'), s.health ?? 0, '\\u2665');
-  glyphBar(document.getElementById('food'), s.food ?? 0, '\\uD83C\\uDF57');
+  glyphBar(document.getElementById('hearts'), s.health ?? 0, 'px-heart');
+  glyphBar(document.getElementById('food'), s.food ?? 0, 'px-food');
   document.getElementById('coords').textContent = s.position
     ? Math.round(s.position.x) + ' ' + Math.round(s.position.y) + ' ' + Math.round(s.position.z) : '';
   seedCrew(s.work);
@@ -704,6 +887,7 @@ async function pollState() {
   }
   document.getElementById('watchers').textContent =
     watching + ' watching \\u00b7 ' + label + (connected === false ? ' \\u00b7 offline' : '');
+  paintFps(frames, camera);
   if (streaming && document.visibilityState === 'visible') {
     let stalled = false;
     if (framesAtStart === null) framesAtStart = frames;
@@ -731,6 +915,16 @@ function paintVitals() {
   // stale = the SAMPLE is old (server clock) or our last successful fetch is
   vitalsEl.classList.toggle('stale', v.stale || Date.now() - telemetryAt > 15000);
   document.getElementById('vstate').textContent = v.state;
+  // the F3 lines the chips already know: dimension/biome and the clock
+  const t = lastTelemetry || {};
+  const where = t.dimension ? String(t.dimension).replace(/^minecraft:/, '') + (t.biome ? ' / ' + String(t.biome).replace(/_/g, ' ') : '') : '';
+  document.getElementById('f3where').textContent = where;
+  if (t.time) { const c = mcClock(t.time.ticks || 0); document.getElementById('f3clock').textContent = 'day ' + t.time.day + ' \\u00b7 ' + c.hhmm + ' ' + (c.part === 'night' ? '\\u263D' : c.part === 'day' ? '\\u2600' : '\\u25D1') + (t.weather && t.weather !== 'clear' ? ' \\u00b7 ' + t.weather : ''); }
+  else document.getElementById('f3clock').textContent = '';
+  // XP bar: a task in flight is the thin green line; idle hides it
+  const xp = document.getElementById('xp');
+  const busy = !!(t.task && t.task.kind && t.task.kind !== 'idle');
+  xp.hidden = !busy; xp.classList.toggle('busy', busy);
   const box = document.getElementById('vchips');
   box.innerHTML = '';
   for (const c of v.chips) {
@@ -748,15 +942,30 @@ function paintInv() {
   invBtn.setAttribute('aria-expanded', invOpen ? 'true' : 'false');
   invEl.hidden = !invOpen;
   const inv = inventoryModel(lastTelemetry && lastTelemetry.inventory, lastTelemetry && lastTelemetry.held);
-  invBtn.textContent = '\uD83C\uDF92 ' + (inv.stacks ? inv.stacks + ' stacks \u00b7 ' + inv.total : 'bag');
+  invBtn.textContent = inv.stacks ? inv.stacks + ' stacks \u00b7 ' + inv.total : 'bag';
+  // the hotbar: the first nine stacks (held first), a two-letter mark + count per slot
+  const hb = document.getElementById('hotbar');
+  hb.innerHTML = '';
+  for (let i = 0; i < 9; i++) {
+    const r = inv.rows[i];
+    const el = document.createElement('div');
+    el.className = 'slot' + (r ? (r.held ? ' held' : '') : ' blank');
+    if (r) {
+      el.title = r.label + ' \u00d7 ' + r.count + (r.held ? ' (in hand)' : '');
+      const ab = document.createElement('span'); ab.className = 'ab'; var words = r.label.split(' '); ab.textContent = words.length > 1 ? words.map(function (w) { return w[0]; }).join('').slice(0, 2) : r.label.slice(0, 2);
+      const c = document.createElement('b'); c.textContent = r.count;
+      el.appendChild(ab); el.appendChild(c);
+    }
+    hb.appendChild(el);
+  }
   if (!invOpen) return;
   invEl.innerHTML = '';
   if (!inv.rows.length) {
-    const e = document.createElement('div'); e.className = 'slot empty'; e.textContent = lastTelemetry ? 'empty hands, empty bag' : 'no telemetry yet';
+    const e = document.createElement('div'); e.className = 'row empty'; e.textContent = lastTelemetry ? 'empty hands, empty bag' : 'no telemetry yet';
     invEl.appendChild(e); return;
   }
   for (const r of inv.rows) {
-    const el = document.createElement('div'); el.className = 'slot' + (r.held ? ' held' : '');
+    const el = document.createElement('div'); el.className = 'row' + (r.held ? ' held' : '');
     el.title = r.label + (r.held ? ' (in hand)' : '');
     const n = document.createElement('span'); n.textContent = (r.held ? '\u270B ' : '') + r.label;
     const c = document.createElement('b'); c.textContent = r.count;
@@ -871,6 +1080,28 @@ document.getElementById('composer').addEventListener('submit', async (e) => {
   input.value = '';
   send(text);
 });
+
+// ── scheme + settings drawer ────────────────────────────────────────────────
+// html[data-scheme] was set before paint by the head script; this is the toggle.
+function setScheme(s) {
+  if (s === 'auto') { try { localStorage.removeItem('mc-scheme'); } catch (e) { /* private mode */ } }
+  else { try { localStorage['mc-scheme'] = s; } catch (e) { /* private mode */ } }
+  const eff = s === 'auto' ? (matchMedia('(max-width: 899px)').matches || matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'paper') : s;
+  document.documentElement.dataset.scheme = eff;
+  const m = document.querySelector('meta[name=theme-color]'); if (m) m.content = eff === 'dark' ? '#000000' : '#ffffff';
+  let stored = null; try { stored = localStorage['mc-scheme']; } catch (e) { /* private mode */ }
+  for (const b of document.querySelectorAll('#schemeRow .pill')) b.classList.toggle('on', b.dataset.scheme === (stored || 'auto'));
+}
+document.getElementById('schemeBtn').addEventListener('click', () => setScheme(document.documentElement.dataset.scheme === 'dark' ? 'paper' : 'dark'));
+for (const b of document.querySelectorAll('#schemeRow .pill')) b.addEventListener('click', () => setScheme(b.dataset.scheme));
+setScheme((() => { try { return localStorage['mc-scheme'] || 'auto'; } catch (e) { return 'auto'; } })());
+const drawer = document.getElementById('drawer');
+const menuBtn = document.getElementById('menuBtn');
+function openDrawer(v) { drawer.hidden = !v; menuBtn.setAttribute('aria-expanded', v ? 'true' : 'false'); if (v) document.getElementById('drawerClose').focus(); else menuBtn.focus(); }
+menuBtn.addEventListener('click', () => openDrawer(true));
+document.getElementById('drawerClose').addEventListener('click', () => openDrawer(false));
+drawer.addEventListener('click', (e) => { if (e.target === drawer) openDrawer(false); });
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !drawer.hidden) openDrawer(false); });
 
 // ── 📞 voice call: this phone is the bot's mic and speaker ──────────────────
 // getUserMedia (echoCancellation:true = the phone's OS-level AEC, so half
@@ -1018,6 +1249,9 @@ document.addEventListener('visibilitychange', () => {
   let s;
   try { s = await status(); }
   catch { msg.textContent = 'Cannot reach the bot \u2014 check the tunnel, then reload.'; return; }
+  document.getElementById('authNote').textContent = !s.enabled ? 'Passkeys are off on this rail (dev bypass or token auth).'
+    : s.enrolled ? 'Unlocked with the admin passkey \\u2014 it lives in this device\\u2019s secure enclave; the session cookie lasts a day.'
+    : 'No passkey enrolled yet.';
   const enter = () => { gate.classList.add('hidden'); connect(); };
   if (!s.enabled || s.authed) return enter();
   // Prefetch the ceremony BEFORE the tap (see note above register). The
